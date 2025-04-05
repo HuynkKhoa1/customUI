@@ -1218,3 +1218,6 @@ function SmoothHub:CreateWindow(config)
                             Callback = toggleConfig.Callback
                         }
                     end
+
+-- cuối file, sau tất cả mọi thứ
+return SmoothHub
