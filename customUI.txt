@@ -509,7 +509,6 @@ function SmoothHub:CreateWindow(config)
             tabFrame.CanvasSize = UDim2.new(0, 0, 0, contentList.AbsoluteContentSize.Y + 10)
         end)
         
-        -- Button click logic
         tabButton.MouseButton1Click:Connect(function()
             if currentTab == tabFrame then return end
             
@@ -528,26 +527,21 @@ function SmoothHub:CreateWindow(config)
                 TextColor3 = self.Theme.TextColor
             }, 0.2)
             
-            -- Switch tabs
             if currentTab then
                 currentTab.Visible = false
             end
             
             tabFrame.Visible = true
             currentTab = tabFrame
-            
-            -- Apply ripple effect
             Ripple(tabButton)
         end)
         
-        -- Tab elements creation functions
         local tab = {
             Container = tabFrame,
             Elements = {},
             ElementCount = 0
         }
         
-        -- Create label
         function tab:AddLabel(labelConfig)
             labelConfig = labelConfig or {}
             labelConfig.Text = labelConfig.Text or "Label"
@@ -593,7 +587,6 @@ function SmoothHub:CreateWindow(config)
             return labelElement
         end
         
-        -- Create button
         function tab:AddButton(buttonConfig)
             buttonConfig = buttonConfig or {}
             buttonConfig.Title = buttonConfig.Title or "Button"
@@ -663,11 +656,13 @@ function SmoothHub:CreateWindow(config)
             }
             
             actionButton.MouseEnter:Connect(function()
-                Tween(actionButton, {BackgroundColor3 = Color3.fromRGB(
-                    math.clamp(self.Theme.Accent.R * 1.1 * 255, 0, 255) / 255,
-                    math.clamp(self.Theme.Accent.G * 1.1 * 255, 0, 255) / 255,
-                    math.clamp(self.Theme.Accent.B * 1.1 * 255, 0, 255) / 255
-                )}, 0.2)
+                Tween(actionButton, {
+                    BackgroundColor3 = Color3.fromRGB(
+                        math.clamp(self.Theme.Accent.R * 1.1 * 255, 0, 255) / 255,
+                        math.clamp(self.Theme.Accent.G * 1.1 * 255, 0, 255) / 255,
+                        math.clamp(self.Theme.Accent.B * 1.1 * 255, 0, 255) / 255
+                    )
+                }, 0.2)
             end)
             
             actionButton.MouseLeave:Connect(function()
@@ -698,7 +693,6 @@ function SmoothHub:CreateWindow(config)
             return buttonElement
         end
         
-        -- Add slider
         function tab:AddSlider(sliderConfig)
             sliderConfig = sliderConfig or {}
             sliderConfig.Title = sliderConfig.Title or "Slider"
@@ -709,7 +703,6 @@ function SmoothHub:CreateWindow(config)
             sliderConfig.Callback = sliderConfig.Callback or function() end
             sliderConfig.Flag = sliderConfig.Flag or nil
             
-            -- Make sure default is within range and properly incremented
             sliderConfig.Default = math.clamp(sliderConfig.Default, sliderConfig.Min, sliderConfig.Max)
             sliderConfig.Default = sliderConfig.Min + (math.round((sliderConfig.Default - sliderConfig.Min) / sliderConfig.Increment) * sliderConfig.Increment)
             
@@ -797,14 +790,11 @@ function SmoothHub:CreateWindow(config)
                 Max = sliderConfig.Max
             }
             
-            -- Slider functionality
             local isDragging = false
             
             sliderBackground.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 then
                     isDragging = true
-                    
-                    -- Update on initial click
                     local relativePos = math.clamp((input.Position.X - sliderBackground.AbsolutePosition.X) / sliderBackground.AbsoluteSize.X, 0, 1)
                     local exactValue = sliderConfig.Min + ((sliderConfig.Max - sliderConfig.Min) * relativePos)
                     local roundedValue = sliderConfig.Min + (math.round((exactValue - sliderConfig.Min) / sliderConfig.Increment) * sliderConfig.Increment)
@@ -812,15 +802,12 @@ function SmoothHub:CreateWindow(config)
                     value = math.clamp(roundedValue, sliderConfig.Min, sliderConfig.Max)
                     sliderElement.Value = value
                     
-                    -- Update UI
                     local percent = (value - sliderConfig.Min) / (sliderConfig.Max - sliderConfig.Min)
                     Tween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}, 0.1)
                     sliderValue.Text = tostring(value)
                     
-                    -- Run callback
                     sliderConfig.Callback(value)
                     
-                    -- Update flag if provided
                     if sliderConfig.Flag then
                         SmoothHub.Flags[sliderConfig.Flag] = {
                             Type = "Slider",
@@ -843,15 +830,12 @@ function SmoothHub:CreateWindow(config)
                     value = math.clamp(roundedValue, sliderConfig.Min, sliderConfig.Max)
                     sliderElement.Value = value
                     
-                    -- Update UI
                     local percent = (value - sliderConfig.Min) / (sliderConfig.Max - sliderConfig.Min)
                     sliderFill.Size = UDim2.new(percent, 0, 1, 0)
                     sliderValue.Text = tostring(value)
                     
-                    -- Run callback
                     sliderConfig.Callback(value)
                     
-                    -- Update flag if provided
                     if sliderConfig.Flag then
                         SmoothHub.Flags[sliderConfig.Flag].Value = value
                     end
@@ -864,25 +848,20 @@ function SmoothHub:CreateWindow(config)
                 end
             end)
             
-            -- TextBox functionality
             sliderValue.FocusLost:Connect(function(enterPressed)
                 if enterPressed then
                     local inputValue = tonumber(sliderValue.Text)
-                    
                     if inputValue then
                         local roundedValue = sliderConfig.Min + (math.round((inputValue - sliderConfig.Min) / sliderConfig.Increment) * sliderConfig.Increment)
                         value = math.clamp(roundedValue, sliderConfig.Min, sliderConfig.Max)
                         sliderElement.Value = value
                         
-                        -- Update UI
                         local percent = (value - sliderConfig.Min) / (sliderConfig.Max - sliderConfig.Min)
                         Tween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}, 0.2)
                         sliderValue.Text = tostring(value)
                         
-                        -- Run callback
                         sliderConfig.Callback(value)
                         
-                        -- Update flag if provided
                         if sliderConfig.Flag then
                             SmoothHub.Flags[sliderConfig.Flag].Value = value
                         end
@@ -892,7 +871,6 @@ function SmoothHub:CreateWindow(config)
                 end
             end)
             
-            -- Register flag if provided
             if sliderConfig.Flag then
                 SmoothHub.Flags[sliderConfig.Flag] = {
                     Type = "Slider",
@@ -908,7 +886,6 @@ function SmoothHub:CreateWindow(config)
             return sliderElement
         end
         
-        -- Add dropdown
         function tab:AddDropdown(dropdownConfig)
             dropdownConfig = dropdownConfig or {}
             dropdownConfig.Title = dropdownConfig.Title or "Dropdown"
@@ -1022,7 +999,6 @@ function SmoothHub:CreateWindow(config)
                 Parent = optionsList
             }
             
-            -- Calculate options height
             local optionsHeight = 0
             for _, option in pairs(dropdownConfig.Options) do
                 local optionButton = Create("TextButton") {
@@ -1052,13 +1028,12 @@ function SmoothHub:CreateWindow(config)
                         SmoothHub.Flags[dropdownConfig.Flag].Value = option
                     end
                     
-                    -- Close dropdown
                     Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 40)}, 0.3)
                     Tween(optionsFrame, {Size = UDim2.new(1, -20, 0, 0)}, 0.3)
                     Tween(dropdownArrow, {Rotation = 0}, 0.3)
                 end)
                 
-                optionsHeight = optionsHeight + 27 -- 25 + 2 padding
+                optionsHeight = optionsHeight + 27
             end
             
             optionsList.CanvasSize = UDim2.new(0, 0, 0, optionsHeight)
@@ -1090,7 +1065,6 @@ function SmoothHub:CreateWindow(config)
                 Value = value
             }
             
-            -- Register flag if provided
             if dropdownConfig.Flag then
                 SmoothHub.Flags[dropdownConfig.Flag] = {
                     Type = "Dropdown",
@@ -1104,7 +1078,6 @@ function SmoothHub:CreateWindow(config)
             return dropdownElement
         end
         
-        -- Create toggle
         function tab:AddToggle(toggleConfig)
             toggleConfig = toggleConfig or {}
             toggleConfig.Title = toggleConfig.Title or "Toggle"
@@ -1199,17 +1172,14 @@ function SmoothHub:CreateWindow(config)
                     value = not value
                     toggleElement.Value = value
                     
-                    -- Update UI
                     Tween(toggleBackground, {BackgroundColor3 = value and self.Theme.Accent or self.Theme.ElementBackground}, 0.2)
                     Tween(toggleCircle, {
                         Position = value and UDim2.new(1, -2, 0.5, 0) or UDim2.new(0, 2, 0.5, 0),
                         AnchorPoint = value and Vector2.new(1, 0.5) or Vector2.new(0, 0.5)
                     }, 0.2)
-
-                    -- Run callback
+                    
                     toggleConfig.Callback(value)
-
-                    -- Update flag if provided
+                    
                     if toggleConfig.Flag then
                         SmoothHub.Flags[toggleConfig.Flag] = {
                             Type = "Toggle",
@@ -1220,8 +1190,7 @@ function SmoothHub:CreateWindow(config)
                     end
                 end
             end)
-
-            -- Register flag if provided (optional block – giữ nếu bạn cần khởi tạo sẵn)
+            
             if toggleConfig.Flag then
                 SmoothHub.Flags[toggleConfig.Flag] = {
                     Type = "Toggle",
@@ -1230,10 +1199,10 @@ function SmoothHub:CreateWindow(config)
                     Callback = toggleConfig.Callback
                 }
             end
-
+            
             table.insert(self.Elements, toggleElement)
             return toggleElement
         end
     end
-
+    
     return SmoothHub
