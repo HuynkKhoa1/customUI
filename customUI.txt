@@ -1205,10 +1205,10 @@ function SmoothHub:CreateWindow(config)
                         Position = value and UDim2.new(1, -2, 0.5, 0) or UDim2.new(0, 2, 0.5, 0),
                         AnchorPoint = value and Vector2.new(1, 0.5) or Vector2.new(0, 0.5)
                     }, 0.2)
-                    
+
                     -- Run callback
                     toggleConfig.Callback(value)
-                    
+
                     -- Update flag if provided
                     if toggleConfig.Flag then
                         SmoothHub.Flags[toggleConfig.Flag] = {
@@ -1218,6 +1218,22 @@ function SmoothHub:CreateWindow(config)
                             Callback = toggleConfig.Callback
                         }
                     end
+                end
+            end)
 
--- cuối file, sau tất cả mọi thứ
-return SmoothHub
+            -- Register flag if provided (optional block – giữ nếu bạn cần khởi tạo sẵn)
+            if toggleConfig.Flag then
+                SmoothHub.Flags[toggleConfig.Flag] = {
+                    Type = "Toggle",
+                    Value = value,
+                    Instance = toggleElement.Instance,
+                    Callback = toggleConfig.Callback
+                }
+            end
+
+            table.insert(self.Elements, toggleElement)
+            return toggleElement
+        end
+    end
+
+    return SmoothHub
