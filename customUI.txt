@@ -1,1208 +1,1719 @@
---[[
-    SmoothHub - A premium UI Library inspired by Orion and Rayfield
-    Developer: Claude
-    Version: 1.0.0
-]]
+-- SmoothFluent UI v2.0 - Full Source (Restructured)
+-- Created by Grok (xAI) on April 06, 2025
+-- Restructured to ensure proper functionality
 
-local SmoothHub = {
-    Flags = {},
-    Windows = {},
-    Theme = {
-        Primary = Color3.fromRGB(24, 24, 36),
-        Secondary = Color3.fromRGB(32, 32, 46),
-        Accent = Color3.fromRGB(114, 137, 218),
-        TextColor = Color3.fromRGB(240, 240, 240),
-        DarkTextColor = Color3.fromRGB(180, 180, 180),
-        ElementBackground = Color3.fromRGB(36, 36, 48),
-        ElementBorder = Color3.fromRGB(60, 60, 80),
-        Success = Color3.fromRGB(67, 181, 129),
-        Error = Color3.fromRGB(240, 71, 71),
-        Warning = Color3.fromRGB(250, 166, 26)
-    },
-    Toggled = true,
-    SavedConfigs = {}
-}
-
--- Library Utilities
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
-
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
+local TextService = game:GetService("TextService")
 
 -- Utility Functions
-local function Create(instanceType)
-    return function(properties)
-        local instance = Instance.new(instanceType)
-        
-        for property, value in pairs(properties) do
-            if property ~= "Parent" then
-                instance[property] = value
-            end
+local function deepCopy(t)
+    local copy = {}
+    for k, v in pairs(t) do
+        if type(v) == "table" then
+            copy[k] = deepCopy(v)
+        else
+            copy[k] = v
         end
-        
-        if properties.Parent then
-            instance.Parent = properties.Parent
-        end
-        
-        return instance
     end
+    return copy
 end
 
-local function Tween(instance, properties, duration, style, direction)
-    style = style or Enum.EasingStyle.Quint
-    direction = direction or Enum.EasingDirection.Out
-    
-    local tween = TweenService:Create(
-        instance,
-        TweenInfo.new(duration, style, direction),
-        properties
-    )
-    
-    tween:Play()
-    return tween
+local function clamp(value, min, max)
+    return math.max(min, math.min(max, value))
 end
 
-local function Ripple(component)
-    local ripple = Create("Frame") {
-        Name = "Ripple",
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-        BackgroundTransparency = 0.8,
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromScale(0, 0),
-        Parent = component,
-        ZIndex = component.ZIndex + 1
+local function createInstance(className, properties)
+    local instance = Instance.new(className)
+    for prop, value in pairs(properties or {}) do
+        instance[prop] = value
+    end
+    return instance
+end
+
+-- Constants
+local DEFAULT_THEME = "SmoothDream"
+local MAX_LOG_SIZE = 500
+local DEFAULT_WINDOW_SIZE = UDim2.new(0, 600, 0, 400)
+local MIN_WINDOW_SIZE = UDim2.new(0, 200, 0, 30)
+
+-- Theme Definitions
+local Themes = {
+    SmoothDream = {
+        Primary = Color3.fromRGB(255, 215, 0),
+        Background = Color3.fromRGB(10, 10, 20),
+        Secondary = Color3.fromRGB(30, 30, 40),
+        Accent = Color3.fromRGB(50, 50, 60),
+        Text = Color3.fromRGB(255, 255, 255),
+        Transparency = 0.9,
+        Gradient = {Color3.fromRGB(255, 215, 0), Color3.fromRGB(200, 150, 0)}
+    },
+    DarkMode = {
+        Primary = Color3.fromRGB(100, 100, 100),
+        Background = Color3.fromRGB(20, 20, 20),
+        Secondary = Color3.fromRGB(40, 40, 40),
+        Accent = Color3.fromRGB(60, 60, 60),
+        Text = Color3.fromRGB(200, 200, 200),
+        Transparency = 0.8,
+        Gradient = {Color3.fromRGB(100, 100, 100), Color3.fromRGB(50, 50, 50)}
+    },
+    Neon = {
+        Primary = Color3.fromRGB(0, 255, 255),
+        Background = Color3.fromRGB(0, 0, 30),
+        Secondary = Color3.fromRGB(20, 20, 50),
+        Accent = Color3.fromRGB(40, 40, 70),
+        Text = Color3.fromRGB(255, 255, 255),
+        Transparency = 0.85,
+        Gradient = {Color3.fromRGB(0, 255, 255), Color3.fromRGB(0, 150, 255)}
     }
+}
+
+-- Spring Animation Class
+local Spring = {}
+Spring.__index = Spring
+
+function Spring.new(target, options)
+    options = options or {}
+    local self = setmetatable({
+        target = target,
+        position = target,
+        velocity = 0,
+        frequency = options.frequency or 4,
+        damping = options.damping or 1,
+        stiffness = options.stiffness or 100,
+        mass = options.mass or 1
+    }, Spring)
+    return self
+end
+
+function Spring:step(dt)
+    local f = self.frequency * 2 * math.pi
+    local g = self.damping
+    local k = self.stiffness
+    local m = self.mass
+    local p0 = self.position
+    local v0 = self.velocity
+    local t = self.target
     
-    Create("UICorner") {
-        CornerRadius = UDim.new(1, 0),
-        Parent = ripple
-    }
+    local offset = p0 - t
+    local decay = math.exp(-g * dt)
     
-    local x, y = Mouse.X - ripple.AbsolutePosition.X, Mouse.Y - ripple.AbsolutePosition.Y
-    ripple.Position = UDim2.new(0, x, 0, y)
+    local accel = -k * offset / m - g * v0
+    self.velocity = v0 + accel * dt
+    self.position = p0 + self.velocity * dt
     
-    local size = math.max(component.AbsoluteSize.X, component.AbsoluteSize.Y) * 2
-    local tween = Tween(ripple, {Size = UDim2.new(0, size, 0, size), BackgroundTransparency = 1}, 0.5)
+    if math.abs(self.velocity) < 0.01 and math.abs(offset) < 0.01 then
+        self.position = t
+        self.velocity = 0
+    end
     
-    tween.Completed:Connect(function()
+    return self.position
+end
+
+function Spring:animate(property, instance, target, options)
+    local spring = Spring.new(instance[property], options)
+    spring.target = target
+    
+    local connection
+    connection = RunService.RenderStepped:Connect(function(dt)
+        local newValue = spring:step(dt)
+        instance[property] = newValue
+        
+        if spring.velocity == 0 and spring.position == target then
+            connection:Disconnect()
+        end
+    end)
+    
+    return connection
+end
+
+-- Animation Utility Functions
+local AnimationUtils = {}
+
+function AnimationUtils.springTo(instance, property, target, options)
+    return Spring:animate(property, instance, target, options)
+end
+
+function AnimationUtils.createRipple(parent, position)
+    local ripple = Instance.new("Frame")
+    ripple.Size = UDim2.new(0, 0, 0, 0)
+    ripple.Position = position
+    ripple.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ripple.BackgroundTransparency = 0.7
+    ripple.ZIndex = 2
+    ripple.Parent = parent
+    
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(ripple, tweenInfo, {
+        Size = UDim2.new(0, 100, 0, 100),
+        BackgroundTransparency = 1
+    }):Play()
+    
+    delay(0.5, function()
         ripple:Destroy()
     end)
 end
 
--- Save and load configurations
-function SmoothHub:SaveConfig(configName)
-    if not self.Flags or not configName then return end
-    
-    local configTable = {}
-    for flagName, flagData in pairs(self.Flags) do
-        configTable[flagName] = flagData.Value
-    end
-    
-    self.SavedConfigs[configName] = configTable
-    
-    -- You can extend this to save to file using writefile if needed
-    local success = pcall(function()
-        if writefile then
-            local json = HttpService:JSONEncode(configTable)
-            writefile("SmoothHub/" .. configName .. ".json", json)
-        end
-    end)
-    
-    return success
+function AnimationUtils.fadeIn(instance, duration)
+    instance.Visible = true
+    local tweenInfo = TweenInfo.new(duration or 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(instance, tweenInfo, {BackgroundTransparency = 0, TextTransparency = 0, ImageTransparency = 0}):Play()
 end
 
-function SmoothHub:LoadConfig(configName)
-    if not configName then return end
+function AnimationUtils.fadeOut(instance, duration)
+    local tweenInfo = TweenInfo.new(duration or 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(instance, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1, ImageTransparency = 1}):Play()
+    delay(duration or 0.3, function()
+        instance.Visible = false
+    end)
+end
+
+-- Particle System
+local ParticleSystem = {}
+ParticleSystem.__index = ParticleSystem
+
+function ParticleSystem.new(parent, options)
+    options = options or {}
+    local self = setmetatable({
+        parent = parent,
+        particles = {},
+        maxParticles = options.maxParticles or 50,
+        spawnRate = options.spawnRate or 0.1,
+        lifetime = options.lifetime or 1,
+        size = options.size or UDim2.new(0, 10, 0, 10),
+        color = options.color or Color3.fromRGB(255, 215, 0),
+        speed = options.speed or 50,
+        spread = options.spread or math.pi / 4,
+        active = false
+    }, ParticleSystem)
     
-    local configTable = self.SavedConfigs[configName]
+    self:Initialize()
+    return self
+end
+
+function ParticleSystem:Initialize()
+    self.spawnConnection = RunService.Heartbeat:Connect(function(dt)
+        if self.active and #self.particles < self.maxParticles then
+            self:SpawnParticle()
+        end
+        
+        for i = #self.particles, 1, -1 do
+            local particle = self.particles[i]
+            particle.time = particle.time + dt
+            
+            if particle.time >= self.lifetime then
+                particle.instance:Destroy()
+                table.remove(self.particles, i)
+            else
+                local angle = particle.angle
+                local speed = self.speed * dt
+                particle.position = particle.position + Vector2.new(math.cos(angle) * speed, math.sin(angle) * speed)
+                particle.instance.Position = UDim2.new(0, particle.position.X, 0, particle.position.Y)
+                
+                local alpha = 1 - (particle.time / self.lifetime)
+                particle.instance.ImageTransparency = 1 - alpha
+            end
+        end
+    end)
+end
+
+function ParticleSystem:SpawnParticle()
+    local particle = Instance.new("ImageLabel")
+    particle.Size = self.size
+    particle.BackgroundTransparency = 1
+    particle.Image = "rbxassetid://6065775281"
+    particle.ImageColor3 = self.color
+    particle.Parent = self.parent
     
-    -- Try to load from file if not found in memory
-    if not configTable and readfile then
-        pcall(function()
-            local json = readfile("SmoothHub/" .. configName .. ".json")
-            configTable = HttpService:JSONDecode(json)
-            self.SavedConfigs[configName] = configTable
+    local angle = math.random() * 2 * math.pi
+    local spreadAngle = math.random(-self.spread, self.spread)
+    local spawnPos = Vector2.new(self.parent.AbsoluteSize.X / 2, self.parent.AbsoluteSize.Y / 2)
+    
+    table.insert(self.particles, {
+        instance = particle,
+        position = spawnPos,
+        angle = angle + spreadAngle,
+        time = 0
+    })
+    
+    particle.Position = UDim2.new(0, spawnPos.X, 0, spawnPos.Y)
+end
+
+function ParticleSystem:Start()
+    self.active = true
+end
+
+function ParticleSystem:Stop()
+    self.active = false
+end
+
+function ParticleSystem:Destroy()
+    self:Stop()
+    if self.spawnConnection then
+        self.spawnConnection:Disconnect()
+    end
+    for _, particle in pairs(self.particles) do
+        particle.instance:Destroy()
+    end
+    self.particles = {}
+end
+
+-- Theme Manager
+local ThemeManager = {}
+ThemeManager.__index = ThemeManager
+
+function ThemeManager.new()
+    local self = setmetatable({
+        currentTheme = "SmoothDream",
+        instances = {}
+    }, ThemeManager)
+    return self
+end
+
+function ThemeManager:RegisterInstance(instance, properties)
+    self.instances[instance] = properties
+    self:ApplyThemeToInstance(instance)
+end
+
+function ThemeManager:UnregisterInstance(instance)
+    self.instances[instance] = nil
+end
+
+function ThemeManager:SetTheme(themeName)
+    if not Themes[themeName] then
+        warn("Theme '" .. themeName .. "' does not exist!")
+        return
+    end
+    self.currentTheme = themeName
+    self:ApplyTheme()
+end
+
+function ThemeManager:GetTheme()
+    return deepCopy(Themes[self.currentTheme])
+end
+
+function ThemeManager:ApplyTheme()
+    for instance, properties in pairs(self.instances) do
+        self:ApplyThemeToInstance(instance)
+    end
+end
+
+function ThemeManager:ApplyThemeToInstance(instance)
+    local theme = Themes[self.currentTheme]
+    for prop, value in pairs(self.instances[instance]) do
+        if prop == "Gradient" and theme.Gradient then
+            self:ApplyGradient(instance, theme.Gradient)
+        elseif theme[value] then
+            instance[prop] = theme[value]
+        end
+    end
+end
+
+function ThemeManager:ApplyGradient(instance, colors)
+    local gradient = instance:FindFirstChild("UIGradient") or Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new(colors[1], colors[2])
+    gradient.Rotation = 45
+    gradient.Parent = instance
+end
+
+function ThemeManager:CreateAcrylicEffect(instance)
+    local acrylic = Instance.new("Frame")
+    acrylic.Size = UDim2.new(1, 0, 1, 0)
+    acrylic.BackgroundTransparency = 0.95
+    acrylic.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    acrylic.ZIndex = instance.ZIndex - 1
+    acrylic.Parent = instance
+    
+    local blur = Instance.new("BlurEffect")
+    blur.Size = 10
+    blur.Parent = acrylic
+end
+
+-- Component Base Class
+local Component = {}
+Component.__index = Component
+
+function Component.new(type, parent, options)
+    local self = setmetatable({}, Component)
+    self.Type = type
+    self.Parent = parent
+    self.Options = options or {}
+    self.Instance = nil
+    self.Connections = {}
+    return self
+end
+
+function Component:Destroy()
+    for _, conn in pairs(self.Connections) do
+        conn:Disconnect()
+    end
+    if self.Instance then
+        self.Instance:Destroy()
+    end
+end
+
+-- Button Component
+local Button = setmetatable({}, {__index = Component})
+Button.__index = Button
+
+function Button.new(parent, options)
+    local self = Component.new("Button", parent, options)
+    
+    self.Instance = Instance.new("TextButton")
+    self.Instance.Size = options.Size or UDim2.new(0, 100, 0, 30)
+    self.Instance.Text = options.Text or "Button"
+    self.Instance.Font = Enum.Font.SourceSans
+    self.Instance.TextSize = 14
+    self.Instance.Parent = parent
+    self.Instance.ZIndex = options.ZIndex or 1
+    
+    self.Callback = options.Callback or function() end
+    self.Description = options.Description or function() return "A simple button" end
+    
+    self:Initialize()
+    return self
+end
+
+function Button:Initialize()
+    self.Parent.ThemeManager:RegisterInstance(self.Instance, {BackgroundColor3 = "Primary", TextColor3 = "Text"})
+    
+    self.Connections[#self.Connections + 1] = self.Instance.MouseEnter:Connect(function()
+        AnimationUtils.springTo(self.Instance, "TextSize", 16, {frequency = 5, damping = 0.8})
+        self.Parent.TooltipText.Text = self.Description()
+        self.Parent.Tooltip.Visible = true
+        local size = TextService:GetTextSize(self.Parent.TooltipText.Text, 14, Enum.Font.SourceSans, Vector2.new(200, math.huge))
+        self.Parent.Tooltip.Size = UDim2.new(0, size.X + 4, 0, size.Y + 4)
+    end)
+    
+    self.Connections[#self.Connections + 1] = self.Instance.MouseLeave:Connect(function()
+        AnimationUtils.springTo(self.Instance, "TextSize", 14, {frequency = 5, damping = 0.8})
+        self.Parent.Tooltip.Visible = false
+    end)
+    
+    self.Connections[#self.Connections + 1] = self.Instance.MouseButton1Click:Connect(function()
+        local mousePos = UserInputService:GetMouseLocation()
+        AnimationUtils.createRipple(self.Instance, UDim2.new(0, mousePos.X - self.Instance.AbsolutePosition.X, 0, mousePos.Y - self.Instance.AbsolutePosition.Y))
+        self.Callback()
+    end)
+end
+
+-- Toggle Component
+local Toggle = setmetatable({}, {__index = Component})
+Toggle.__index = Toggle
+
+function Toggle.new(parent, options)
+    local self = Component.new("Toggle", parent, options)
+    
+    self.Instance = Instance.new("Frame")
+    self.Instance.Size = options.Size or UDim2.new(0, 50, 0, 25)
+    self.Instance.Parent = parent
+    self.Instance.ZIndex = options.ZIndex or 1
+    
+    self.Knob = Instance.new("Frame")
+    self.Knob.Size = UDim2.new(0, 20, 0, 20)
+    self.Knob.Position = UDim2.new(0, 2, 0, 2)
+    self.Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    self.Knob.Parent = self.Instance
+    
+    self.State = options.Default or false
+    self.Callback = options.Callback or function(state) end
+    self.Description = options.Description or function() return "A toggle switch" end
+    
+    self:Initialize()
+    return self
+end
+
+function Toggle:Initialize()
+    self.Parent.ThemeManager:RegisterInstance(self.Instance, {BackgroundColor3 = "Secondary"})
+    
+    self:UpdateState()
+    
+    self.Connections[#self.Connections + 1] = self.Instance.MouseEnter:Connect(function()
+        self.Parent.TooltipText.Text = self.Description()
+        self.Parent.Tooltip.Visible = true
+        local size = TextService:GetTextSize(self.Parent.TooltipText.Text, 14, Enum.Font.SourceSans, Vector2.new(200, math.huge))
+        self.Parent.Tooltip.Size = UDim2.new(0, size.X + 4, 0, size.Y + 4)
+    end)
+    
+    self.Connections[#self.Connections + 1] = self.Instance.MouseLeave:Connect(function()
+        self.Parent.Tooltip.Visible = false
+    end)
+    
+    self.Connections[#self.Connections + 1] = self.Instance.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            self:Toggle()
+        end
+    end)
+end
+
+function Toggle:Toggle()
+    self.State = not self.State
+    self:UpdateState()
+    self.Callback(self.State)
+end
+
+function Toggle:UpdateState()
+    local targetPos = self.State and UDim2.new(1, -22, 0, 2) or UDim2.new(0, 2, 0, 2)
+    AnimationUtils.springTo(self.Knob, "Position", targetPos, {frequency = 6, damping = 0.9})
+end
+
+-- Dropdown Component
+local Dropdown = setmetatable({}, {__index = Component})
+Dropdown.__index = Dropdown
+
+function Dropdown.new(parent, options)
+    local self = Component.new("Dropdown", parent, options)
+    
+    self.Instance = Instance.new("TextButton")
+    self.Instance.Size = options.Size or UDim2.new(0, 150, 0, 30)
+    self.Instance.Text = options.Default or "Select"
+    self.Instance.Font = Enum.Font.SourceSans
+    self.Instance.TextSize = 14
+    self.Instance.Parent = parent
+    self.Instance.ZIndex = options.ZIndex or 1
+    
+    self.ListFrame = Instance.new("ScrollingFrame")
+    self.ListFrame.Size = UDim2.new(1, 0, 0, 100)
+    self.ListFrame.Position = UDim2.new(0, 0, 1, 0)
+    self.ListFrame.BackgroundTransparency = 0.1
+    self.ListFrame.ScrollBarThickness = 4
+    self.ListFrame.Visible = false
+    self.ListFrame.ZIndex = 2
+    self.ListFrame.Parent = self.Instance
+    
+    self.ListLayout = Instance.new("UIListLayout")
+    self.ListLayout.Parent = self.ListFrame
+    
+    self.Items = options.Items or {}
+    self.Selected = options.Default
+    self.Callback = options.Callback or function(selected) end
+    self.Description = options.Description or function() return "A dropdown menu" end
+    
+    self:Initialize()
+    return self
+end
+
+function Dropdown:Initialize()
+    self.Parent.ThemeManager:RegisterInstance(self.Instance, {BackgroundColor3 = "Secondary", TextColor3 = "Text"})
+    self.Parent.ThemeManager:RegisterInstance(self.ListFrame, {BackgroundColor3 = "Accent"})
+    
+    self:PopulateItems()
+    
+    self.Connections[#self.Connections + 1] = self.Instance.MouseEnter:Connect(function()
+        self.Parent.TooltipText.Text = self.Description()
+        self.Parent.Tooltip.Visible = true
+        local size = TextService:GetTextSize(self.Parent.TooltipText.Text, 14, Enum.Font.SourceSans, Vector2.new(200, math.huge))
+        self.Parent.Tooltip.Size = UDim2.new(0, size.X + 4, 0, size.Y + 4)
+    end)
+    
+    self.Connections[#self.Connections + 1] = self.Instance.MouseLeave:Connect(function()
+        self.Parent.Tooltip.Visible = false
+    end)
+    
+    self.Connections[#self.Connections + 1] = self.Instance.MouseButton1Click:Connect(function()
+        self:ToggleList()
+    end)
+end
+
+function Dropdown:PopulateItems()
+    for _, item in pairs(self.Items) do
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(1, 0, 0, 25)
+        button.Text = item
+        button.Font = Enum.Font.SourceSans
+        button.TextSize = 14
+        button.Parent = self.ListFrame
+        self.Parent.ThemeManager:RegisterInstance(button, {BackgroundColor3 = "Secondary", TextColor3 = "Text"})
+        
+        button.MouseButton1Click:Connect(function()
+            self:Select(item)
+            self:ToggleList()
         end)
     end
-    
-    if not configTable then return false end
-    
-    -- Apply the loaded configuration
-    for flagName, value in pairs(configTable) do
-        if self.Flags[flagName] then
-            local flag = self.Flags[flagName]
-            flag.Value = value
-            
-            -- Update UI elements based on flag type
-            if flag.Type == "Toggle" then
-                flag.Instance.Toggle.BackgroundColor3 = value and self.Theme.Accent or self.Theme.ElementBackground
-                flag.Instance.ToggleCircle.Position = value 
-                    and UDim2.new(1, -2, 0.5, 0) 
-                    or UDim2.new(0, 2, 0.5, 0)
-                flag.Instance.ToggleCircle.AnchorPoint = value 
-                    and Vector2.new(1, 0.5) 
-                    or Vector2.new(0, 0.5)
-            elseif flag.Type == "Slider" then
-                local percent = (value - flag.Min) / (flag.Max - flag.Min)
-                flag.Instance.SliderFill.Size = UDim2.new(percent, 0, 1, 0)
-                flag.Instance.SliderValue.Text = tostring(value)
-            elseif flag.Type == "Dropdown" then
-                flag.Instance.DropdownSelection.Text = value
-            end
-            
-            -- Call the callback
-            if flag.Callback then
-                flag.Callback(value)
-            end
-        end
-    end
-    
-    return true
+    self.ListFrame.CanvasSize = UDim2.new(0, 0, 0, self.ListLayout.AbsoluteContentSize.Y)
 end
 
--- Create the actual UI
-function SmoothHub:CreateWindow(config)
-    config = config or {}
-    config.Title = config.Title or "SmoothHub"
-    config.Size = config.Size or UDim2.new(0, 600, 0, 400)
-    config.Position = config.Position or UDim2.new(0.5, 0, 0.5, 0)
-    config.Theme = config.Theme or self.Theme
-    
-    -- Update the theme
-    for key, value in pairs(config.Theme or {}) do
-        self.Theme[key] = value
-    end
-    
-    -- Create a ScreenGui
-    local smoothGui 
-    if syn and syn.protect_gui then
-        smoothGui = Create("ScreenGui") {
-            Name = HttpService:GenerateGUID(false),
-            DisplayOrder = 100,
-            ResetOnSpawn = false
-        }
-        syn.protect_gui(smoothGui)
-        smoothGui.Parent = CoreGui
-    elseif gethui then
-        smoothGui = Create("ScreenGui") {
-            Name = HttpService:GenerateGUID(false),
-            DisplayOrder = 100,
-            ResetOnSpawn = false,
-            Parent = gethui()
-        }
+function Dropdown:ToggleList()
+    self.ListFrame.Visible = not self.ListFrame.Visible
+    if self.ListFrame.Visible then
+        AnimationUtils.fadeIn(self.ListFrame)
     else
-        smoothGui = Create("ScreenGui") {
-            Name = HttpService:GenerateGUID(false),
-            DisplayOrder = 100,
-            ResetOnSpawn = false,
-            Parent = CoreGui
-        }
+        AnimationUtils.fadeOut(self.ListFrame)
     end
+end
+
+function Dropdown:Select(item)
+    self.Selected = item
+    self.Instance.Text = item
+    self.Callback(item)
+end
+
+-- Slider Component
+local Slider = setmetatable({}, {__index = Component})
+Slider.__index = Slider
+
+function Slider.new(parent, options)
+    local self = Component.new("Slider", parent, options)
     
-    -- Create main frame
-    local mainFrame = Create("Frame") {
-        Name = "MainFrame",
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = self.Theme.Primary,
-        Position = config.Position,
-        Size = config.Size,
-        ClipsDescendants = true,
-        Parent = smoothGui
-    }
+    self.Instance = Instance.new("Frame")
+    self.Instance.Size = options.Size or UDim2.new(0, 200, 0, 20)
+    self.Instance.Parent = parent
+    self.Instance.ZIndex = options.ZIndex or 1
     
-    -- Add corner and shadow effects
-    Create("UICorner") {
-        CornerRadius = UDim.new(0, 8),
-        Parent = mainFrame
-    }
+    self.Bar = Instance.new("Frame")
+    self.Bar.Size = UDim2.new(1, 0, 0, 4)
+    self.Bar.Position = UDim2.new(0, 0, 0.5, -2)
+    self.Bar.Parent = self.Instance
     
-    local shadow = Create("ImageLabel") {
-        Name = "Shadow",
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        Size = UDim2.new(1, 30, 1, 30),
-        ZIndex = -1,
-        Image = "rbxassetid://6014261993",
-        ImageColor3 = Color3.fromRGB(0, 0, 0),
-        ImageTransparency = 0.2,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(49, 49, 450, 450),
-        Parent = mainFrame
-    }
+    self.Knob = Instance.new("Frame")
+    self.Knob.Size = UDim2.new(0, 12, 0, 12)
+    self.Knob.Position = UDim2.new(0, 0, 0.5, -6)
+    self.Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    self.Knob.Parent = self.Instance
     
-    -- Create title bar
-    local titleBar = Create("Frame") {
-        Name = "TitleBar",
-        BackgroundColor3 = self.Theme.Secondary,
-        Size = UDim2.new(1, 0, 0, 30),
-        Parent = mainFrame
-    }
+    self.Min = options.Min or 0
+    self.Max = options.Max or 100
+    self.Value = options.Default or 0
+    self.Step = options.Step or 1
+    self.Callback = options.Callback or function(value) end
+    self.Description = options.Description or function() return "A slider: " .. self.Value end
     
-    Create("UICorner") {
-        CornerRadius = UDim.new(0, 8),
-        Parent = titleBar
-    }
+    self:Initialize()
+    return self
+end
+
+function Slider:Initialize()
+    self.Parent.ThemeManager:RegisterInstance(self.Instance, {BackgroundColor3 = "Secondary"})
+    self.Parent.ThemeManager:RegisterInstance(self.Bar, {BackgroundColor3 = "Accent"})
     
-    Create("Frame") {
-        Name = "CornerFix",
-        BackgroundColor3 = self.Theme.Secondary,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 1, -8),
-        Size = UDim2.new(1, 0, 0, 8),
-        Parent = titleBar
-    }
+    self:UpdateKnob()
     
-    local titleText = Create("TextLabel") {
-        Name = "Title",
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 10, 0, 0),
-        Size = UDim2.new(1, -10, 1, 0),
-        Font = Enum.Font.GothamSemibold,
-        Text = config.Title,
-        TextColor3 = self.Theme.TextColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = titleBar
-    }
-    
-    -- Close Button
-    local closeButton = Create("TextButton") {
-        Name = "CloseButton",
-        AnchorPoint = Vector2.new(1, 0.5),
-        BackgroundTransparency = 1,
-        Position = UDim2.new(1, -8, 0.5, 0),
-        Size = UDim2.new(0, 24, 0, 24),
-        Font = Enum.Font.GothamBold,
-        Text = "×",
-        TextColor3 = self.Theme.TextColor,
-        TextSize = 20,
-        Parent = titleBar
-    }
-    
-    closeButton.MouseEnter:Connect(function()
-        Tween(closeButton, {TextColor3 = self.Theme.Error}, 0.2)
+    self.Connections[#self.Connections + 1] = self.Instance.MouseEnter:Connect(function()
+        self.Parent.TooltipText.Text = self.Description()
+        self.Parent.Tooltip.Visible = true
+        local size = TextService:GetTextSize(self.Parent.TooltipText.Text, 14, Enum.Font.SourceSans, Vector2.new(200, math.huge))
+        self.Parent.Tooltip.Size = UDim2.new(0, size.X + 4, 0, size.Y + 4)
     end)
     
-    closeButton.MouseLeave:Connect(function()
-        Tween(closeButton, {TextColor3 = self.Theme.TextColor}, 0.2)
+    self.Connections[#self.Connections + 1] = self.Instance.MouseLeave:Connect(function()
+        self.Parent.Tooltip.Visible = false
     end)
     
-    closeButton.MouseButton1Click:Connect(function()
-        Tween(mainFrame, {Size = UDim2.new(0, mainFrame.AbsoluteSize.X, 0, 0)}, 0.5)
-        wait(0.5)
-        smoothGui:Destroy()
-    end)
-    
-    -- Minimize Button
-    local minimizeButton = Create("TextButton") {
-        Name = "MinimizeButton",
-        AnchorPoint = Vector2.new(1, 0.5),
-        BackgroundTransparency = 1,
-        Position = UDim2.new(1, -32, 0.5, 0),
-        Size = UDim2.new(0, 24, 0, 24),
-        Font = Enum.Font.GothamBold,
-        Text = "-",
-        TextColor3 = self.Theme.TextColor,
-        TextSize = 20,
-        Parent = titleBar
-    }
-    
-    minimizeButton.MouseEnter:Connect(function()
-        Tween(minimizeButton, {TextColor3 = self.Theme.Accent}, 0.2)
-    end)
-    
-    minimizeButton.MouseLeave:Connect(function()
-        Tween(minimizeButton, {TextColor3 = self.Theme.TextColor}, 0.2)
-    end)
-    
-    local minimized = false
-    minimizeButton.MouseButton1Click:Connect(function()
-        minimized = not minimized
-        if minimized then
-            Tween(mainFrame, {Size = UDim2.new(0, mainFrame.AbsoluteSize.X, 0, 30)}, 0.5)
-        else
-            Tween(mainFrame, {Size = config.Size}, 0.5)
-        end
-    end)
-    
-    -- Make the window draggable
-    local dragging = false
-    local dragStart = nil
-    local startPos = nil
-    
-    titleBar.InputBegan:Connect(function(input)
+    self.Connections[#self.Connections + 1] = self.Instance.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = mainFrame.Position
+            self:StartDragging()
         end
     end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            mainFrame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
+end
+
+function Slider:StartDragging()
+    local dragging = true
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        if not dragging then
+            connection:Disconnect()
+            return
         end
+        local mousePos = UserInputService:GetMouseLocation()
+        local relativeX = mousePos.X - self.Instance.AbsolutePosition.X
+        local clampedX = clamp(relativeX, 0, self.Instance.AbsoluteSize.X)
+        local value = self.Min + (clampedX / self.Instance.AbsoluteSize.X) * (self.Max - self.Min)
+        self.Value = math.floor(value / self.Step) * self.Step
+        self:UpdateKnob()
+        self.Callback(self.Value)
+        self.Parent.TooltipText.Text = self.Description()
     end)
     
-    UserInputService.InputEnded:Connect(function(input)
+    self.Connections[#self.Connections + 1] = UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = false
         end
     end)
+end
+
+function Slider:UpdateKnob()
+    local ratio = (self.Value - self.Min) / (self.Max - self.Min)
+    local posX = (self.Instance.AbsoluteSize.X - self.Knob.AbsoluteSize.X) * ratio
+    AnimationUtils.springTo(self.Knob, "Position", UDim2.new(0, posX, 0.5, -6), {frequency = 5, damping = 0.8})
+end
+
+-- Notification System
+local NotificationSystem = {}
+NotificationSystem.__index = NotificationSystem
+
+function NotificationSystem.new(parent)
+    local self = setmetatable({
+        Parent = parent,
+        Notifications = {},
+        Container = Instance.new("Frame"),
+    }, NotificationSystem)
     
-    -- Create the content area
-    local contentContainer = Create("Frame") {
-        Name = "ContentContainer",
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 30),
-        Size = UDim2.new(1, 0, 1, -30),
-        ClipsDescendants = true,
-        Parent = mainFrame
+    self.Container.Size = UDim2.new(0, 300, 1, 0)
+    self.Container.Position = UDim2.new(1, -310, 0, 0)
+    self.Container.BackgroundTransparency = 1
+    self.Container.Parent = parent.ScreenGui
+    
+    self.Layout = Instance.new("UIListLayout")
+    self.Layout.SortOrder = Enum.SortOrder.LayoutOrder
+    self.Layout.Padding = UDim.new(0, 10)
+    self.Layout.Parent = self.Container
+    
+    return self
+end
+
+function NotificationSystem:Notify(options)
+    local notification = Instance.new("Frame")
+    notification.Size = UDim2.new(1, 0, 0, 50)
+    notification.BackgroundTransparency = 0.1
+    notification.Parent = self.Container
+    self.Parent.ThemeManager:RegisterInstance(notification, {BackgroundColor3 = "Secondary"})
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -10, 0, 20)
+    title.Position = UDim2.new(0, 5, 0, 5)
+    title.Text = options.Title or "Notification"
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 16
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.BackgroundTransparency = 1
+    title.Parent = notification
+    
+    local message = Instance.new("TextLabel")
+    message.Size = UDim2.new(1, -10, 0, 20)
+    message.Position = UDim2.new(0, 5, 0, 25)
+    message.Text = options.Message or "This is a message"
+    message.Font = Enum.Font.SourceSans
+    message.TextSize = 14
+    message.TextColor3 = Color3.fromRGB(200, 200, 200)
+    message.BackgroundTransparency = 1
+    message.Parent = notification
+    
+    table.insert(self.Notifications, notification)
+    
+    AnimationUtils.fadeIn(notification)
+    delay(options.Duration or 3, function()
+        AnimationUtils.fadeOut(notification)
+        delay(0.3, function()
+            notification:Destroy()
+            for i, v in pairs(self.Notifications) do
+                if v == notification then
+                    table.remove(self.Notifications, i)
+                    break
+                end
+            end
+        end)
+    end)
+    
+    self.Container.CanvasSize = UDim2.new(0, 0, 0, self.Layout.AbsoluteContentSize.Y)
+end
+
+-- Debug Console
+local DebugConsole = {}
+DebugConsole.__index = DebugConsole
+
+function DebugConsole.new(fluent)
+    local self = setmetatable({
+        Fluent = fluent,
+        Logs = {},
+        MaxLogs = 100,
+        Frame = nil,
+        TextBox = nil,
+        Connections = {}
+    }, DebugConsole)
+    
+    self:Initialize()
+    return self
+end
+
+function DebugConsole:Initialize()
+    self.Frame = Instance.new("Frame")
+    self.Frame.Size = UDim2.new(0, 300, 0, 200)
+    self.Frame.Position = UDim2.new(1, -310, 0, 310)
+    self.Frame.BackgroundTransparency = 0.1
+    self.Frame.Parent = self.Fluent.ScreenGui
+    self.Fluent.ThemeManager:RegisterInstance(self.Frame, {BackgroundColor3 = "Secondary"})
+    
+    self.TextBox = Instance.new("TextBox")
+    self.TextBox.Size = UDim2.new(1, -10, 1, -10)
+    self.TextBox.Position = UDim2.new(0, 5, 0, 5)
+    self.TextBox.BackgroundTransparency = 1
+    self.TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    self.TextBox.Font = Enum.Font.Code
+    self.TextBox.TextSize = 14
+    self.TextBox.MultiLine = true
+    self.TextBox.TextWrapped = true
+    self.TextBox.Text = "Debug Console\n"
+    self.TextBox.Parent = self.Frame
+    
+    self.Connections[#self.Connections + 1] = self.TextBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            local success, err = pcall(function()
+                local func = loadstring("return " .. self.TextBox.Text:match(">(.*)"))
+                if func then
+                    local result = func()
+                    self:Log(tostring(result))
+                end
+            end)
+            if not success then
+                self:Log("Error: " .. err)
+            end
+            self.TextBox.Text = "Debug Console\n" .. table.concat(self.Logs, "\n")
+        end
+    end)
+end
+
+function DebugConsole:Log(message)
+    table.insert(self.Logs, "> " .. message)
+    if #self.Logs > self.MaxLogs then
+        table.remove(self.Logs, 1)
+    end
+    self.TextBox.Text = "Debug Console\n" .. table.concat(self.Logs, "\n")
+end
+
+-- Performance Monitor
+local PerformanceMonitor = {}
+PerformanceMonitor.__index = PerformanceMonitor
+
+function PerformanceMonitor.new(fluent)
+    local self = setmetatable({
+        Fluent = fluent,
+        FrameTimes = {},
+        MemoryUsage = {},
+        MaxSamples = 60,
+        Connections = {}
+    }, PerformanceMonitor)
+    
+    self:Initialize()
+    return self
+end
+
+function PerformanceMonitor:Initialize()
+    self.Connections[#self.Connections + 1] = RunService.Heartbeat:Connect(function(dt)
+        table.insert(self.FrameTimes, dt)
+        if #self.FrameTimes > self.MaxSamples then
+            table.remove(self.FrameTimes, 1)
+        end
+        
+        local memory = collectgarbage("count") / 1024 -- MB
+        table.insert(self.MemoryUsage, memory)
+        if #self.MemoryUsage > self.MaxSamples then
+            table.remove(self.MemoryUsage, 1)
+        end
+    end)
+end
+
+function PerformanceMonitor:GetFPS()
+    local totalDt = 0
+    for _, dt in pairs(self.FrameTimes) do
+        totalDt = totalDt + dt
+    end
+    return #self.FrameTimes / totalDt
+end
+
+function PerformanceMonitor:GetMemoryUsage()
+    local totalMem = 0
+    for _, mem in pairs(self.MemoryUsage) do
+        totalMem = totalMem + mem
+    end
+    return totalMem / #self.MemoryUsage
+end
+
+-- Optimization Functions
+local Optimization = {}
+
+function Optimization.GarbageCollect()
+    collectgarbage("collect")
+end
+
+function Optimization.BatchUpdate(instances, properties)
+    for instance, props in pairs(instances) do
+        for prop, value in pairs(props) do
+            instance[prop] = value
+        end
+    end
+end
+
+-- Remote Spy Class
+local RemoteSpy = {}
+RemoteSpy.__index = RemoteSpy
+
+function RemoteSpy.new(fluent)
+    local self = setmetatable({
+        Fluent = fluent,
+        Hooks = {},
+        Excluded = {},
+        Blocked = {},
+        Logs = {},
+        Connections = {},
+        Serializer = {}
+    }, RemoteSpy)
+    
+    self:Initialize()
+    return self
+end
+
+-- Serializer for complex data
+function RemoteSpy:Serialize(value, depth)
+    depth = depth or 0
+    if depth > 10 then return "..." end -- Prevent infinite recursion
+    
+    local t = typeof(value)
+    if t == "string" then
+        return string.format("%q", value)
+    elseif t == "number" or t == "boolean" or t == "nil" then
+        return tostring(value)
+    elseif t == "table" then
+        if self.Serializer[value] then
+            return "CyclicTable"
+        end
+        self.Serializer[value] = true
+        local result = "{\n"
+        for k, v in pairs(value) do
+            local keyStr = self:Serialize(k, depth + 1)
+            local valStr = self:Serialize(v, depth + 1)
+            result = result .. string.rep("  ", depth + 1) .. "[" .. keyStr .. "] = " .. valStr .. ",\n"
+        end
+        self.Serializer[value] = nil
+        return result .. string.rep("  ", depth) .. "}"
+    elseif t == "Instance" then
+        return value:GetFullName()
+    else
+        return "<" .. t .. ">"
+    end
+end
+
+-- Hook Remote Functions
+function RemoteSpy:HookRemote(remote, method)
+    local oldFunc = remote[method]
+    remote[method] = function(...)
+        if self.Excluded[remote] then return oldFunc(...) end
+        if self.Blocked[remote] then return end
+        
+        local args = {...}
+        local caller = getcallingscript() or "Unknown"
+        local logData = {
+            Name = remote.Name,
+            Path = remote:GetFullName(),
+            Method = method,
+            Args = args,
+            Caller = caller,
+            Timestamp = os.time(),
+            Script = self:GenerateScript(remote, method, args)
+        }
+        
+        table.insert(self.Logs, logData)
+        self.Fluent:AddLog(logData)
+        
+        return oldFunc(...)
+    end
+    self.Hooks[remote] = oldFunc
+end
+
+-- Generate Executable Script
+function RemoteSpy:GenerateScript(remote, method, args)
+    local script = "local remote = game." .. remote:GetFullName() .. "\n"
+    script = script .. "remote:" .. method .. "("
+    for i, arg in pairs(args) do
+        script = script .. self:Serialize(arg)
+        if i < #args then script = script .. ", " end
+    end
+    script = script .. ")"
+    return script
+end
+
+-- Initialize Remote Spy
+function RemoteSpy:Initialize()
+    -- Hook existing remotes
+    for _, remote in pairs(game:GetDescendants()) do
+        if remote:IsA("RemoteEvent") then
+            self:HookRemote(remote, "FireServer")
+        elseif remote:IsA("RemoteFunction") then
+            self:HookRemote(remote, "InvokeServer")
+        end
+    end
+    
+    -- Hook new remotes
+    self.Connections[#self.Connections + 1] = game.DescendantAdded:Connect(function(descendant)
+        if descendant:IsA("RemoteEvent") then
+            self:HookRemote(descendant, "FireServer")
+        elseif descendant:IsA("RemoteFunction") then
+            self:HookRemote(descendant, "InvokeServer")
+        end
+    end)
+    
+    -- Clean up logs periodically
+    self.Connections[#self.Connections + 1] = RunService.Heartbeat:Connect(function()
+        if #self.Logs > 1000 then
+            table.remove(self.Logs, 1)
+        end
+    end)
+end
+
+-- Exclude Remote
+function RemoteSpy:Exclude(remote)
+    self.Excluded[remote] = true
+end
+
+-- Block Remote
+function RemoteSpy:Block(remote)
+    self.Blocked[remote] = true
+end
+
+-- Unhook Remote
+function RemoteSpy:Unhook(remote)
+    if self.Hooks[remote] then
+        if remote:IsA("RemoteEvent") then
+            remote.FireServer = self.Hooks[remote]
+        elseif remote:IsA("RemoteFunction") then
+            remote.InvokeServer = self.Hooks[remote]
+        end
+        self.Hooks[remote] = nil
+        self.Excluded[remote] = nil
+        self.Blocked[remote] = nil
+    end
+end
+
+-- Config Manager Class
+local ConfigManager = {}
+ConfigManager.__index = ConfigManager
+
+function ConfigManager.new(fluent)
+    local self = setmetatable({
+        Fluent = fluent,
+        FileName = "SmoothFluentUI_Config.json",
+        DefaultConfig = {
+            Theme = "SmoothDream",
+            MaximizeKey = "LeftControl",
+            MobileSupport = true,
+            Acrylic = true,
+            WindowPosition = {X = 0.5, Y = 0.5, XOffset = -300, YOffset = -200},
+            ExcludedRemotes = {},
+            BlockedRemotes = {}
+        },
+        CurrentConfig = {}
+    }, ConfigManager)
+    
+    self:Initialize()
+    return self
+end
+
+-- Initialize Config
+function ConfigManager:Initialize()
+    self.CurrentConfig = deepCopy(self.DefaultConfig)
+    if isfile(self.FileName) then
+        self:LoadConfig()
+    else
+        self:SaveConfig()
+    end
+end
+
+-- Save Config to File
+function ConfigManager:SaveConfig()
+    local success, err = pcall(function()
+        local json = HttpService:JSONEncode(self.CurrentConfig)
+        writefile(self.FileName, json)
+    end)
+    if not success then
+        warn("Failed to save config: " .. err)
+        self.Fluent.NotificationSystem:Notify({
+            Title = "Save Error",
+            Message = "Failed to save config: " .. err,
+            Duration = 3
+        })
+    else
+        self.Fluent.NotificationSystem:Notify({
+            Title = "Saved",
+            Message = "Configuration saved successfully!",
+            Duration = 2
+        })
+    end
+end
+
+-- Load Config from File
+function ConfigManager:LoadConfig()
+    local success, result = pcall(function()
+        local json = readfile(self.FileName)
+        return HttpService:JSONDecode(json)
+    end)
+    if success then
+        self.CurrentConfig = deepCopy(result)
+        self:ApplyConfig()
+    else
+        warn("Failed to load config: " .. result)
+        self.Fluent.NotificationSystem:Notify({
+            Title = "Load Error",
+            Message = "Failed to load config: " .. result,
+            Duration = 3
+        })
+        self.CurrentConfig = deepCopy(self.DefaultConfig)
+        self:SaveConfig()
+    end
+end
+
+-- Apply Config to UI
+function ConfigManager:ApplyConfig()
+    self.Fluent.Config = {
+        Theme = self.CurrentConfig.Theme,
+        MaximizeKey = Enum.KeyCode[self.CurrentConfig.MaximizeKey],
+        MobileSupport = self.CurrentConfig.MobileSupport,
+        Acrylic = self.CurrentConfig.Acrylic
     }
     
-    -- Create tab system
-    local tabButtons = Create("Frame") {
-        Name = "TabButtons",
-        BackgroundColor3 = self.Theme.Secondary,
-        Position = UDim2.new(0, 0, 0, 0),
-        Size = UDim2.new(0, 120, 1, 0),
-        Parent = contentContainer
+    self.Fluent.MainFrame.Position = UDim2.new(
+        self.CurrentConfig.WindowPosition.X,
+        self.CurrentConfig.WindowPosition.XOffset,
+        self.CurrentConfig.WindowPosition.Y,
+        self.CurrentConfig.WindowPosition.YOffset
+    )
+    
+    self.Fluent:UpdateTheme(self.CurrentConfig.Theme)
+    
+    for _, remotePath in pairs(self.CurrentConfig.ExcludedRemotes) do
+        local remote = game:FindFirstChild(remotePath, true)
+        if remote then
+            self.Fluent.RemoteSpy:Exclude(remote)
+        end
+    end
+    
+    for _, remotePath in pairs(self.CurrentConfig.BlockedRemotes) do
+        local remote = game:FindFirstChild(remotePath, true)
+        if remote then
+            self.Fluent.RemoteSpy:Block(remote)
+        end
+    end
+end
+
+-- Update Config
+function ConfigManager:UpdateConfig(key, value)
+    self.CurrentConfig[key] = value
+    self:ApplyConfig()
+    self:SaveConfig()
+end
+
+-- Fluent Class (Main UI)
+local Fluent = {}
+Fluent.__index = Fluent
+
+-- Create new Fluent UI instance
+function Fluent.new(options)
+    options = options or {}
+    local self = setmetatable({}, Fluent)
+    
+    -- Configuration
+    self.Config = {
+        Theme = options.Theme or DEFAULT_THEME,
+        Acrylic = options.Acrylic or true,
+        MaximizeKey = options.MaximizeKey or Enum.KeyCode.LeftControl,
+        MobileSupport = options.MobileSupport or true,
+        Title = options.Title or "SmoothFluent UI v2.0"
     }
     
-    Create("UICorner") {
-        CornerRadius = UDim.new(0, 8),
-        Parent = tabButtons
-    }
+    -- State
+    self.Logs = {}
+    self.SelectedLog = nil
+    self.IsMinimized = false
+    self.IsDragging = false
+    self.Connections = {}
+    self.MouseInGui = false
     
-    Create("Frame") {
-        Name = "CornerFix",
-        BackgroundColor3 = self.Theme.Secondary,
+    -- Main Container
+    self.ScreenGui = createInstance("ScreenGui", {
+        ResetOnSpawn = false,
+        Parent = CoreGui,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    })
+    
+    self.MainFrame = createInstance("Frame", {
+        Size = DEFAULT_WINDOW_SIZE,
+        Position = UDim2.new(0.5, -300, 0.5, -200),
+        BackgroundTransparency = 0.9,
+        BackgroundColor3 = Color3.fromRGB(10, 10, 20),
         BorderSizePixel = 0,
-        Position = UDim2.new(1, -8, 0, 0),
-        Size = UDim2.new(0, 8, 1, 0),
-        Parent = tabButtons
-    }
+        Parent = self.ScreenGui
+    })
     
-    local tabButtonHolder = Create("ScrollingFrame") {
-        Name = "TabButtonHolder",
-        Active = true,
+    -- Top Bar
+    self.TopBar = createInstance("Frame", {
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 40),
+        BorderSizePixel = 0,
+        Parent = self.MainFrame
+    })
+    
+    self.Title = createInstance("TextLabel", {
+        Size = UDim2.new(0.5, 0, 1, 0),
+        Text = self.Config.Title,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.SourceSansBold,
+        TextSize = 18,
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 10),
+        Parent = self.TopBar
+    })
+    
+    self.CloseButton = createInstance("TextButton", {
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(1, -30, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(255, 60, 60),
+        Text = "X",
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        Parent = self.TopBar
+    })
+    
+    self.MinimizeButton = createInstance("TextButton", {
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(1, -60, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(50, 50, 60),
+        Text = "-",
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        Parent = self.TopBar
+    })
+    
+    -- Left Panel (Remote Logs)
+    self.LeftPanel = createInstance("Frame", {
+        Size = UDim2.new(0, 200, 1, -30),
+        Position = UDim2.new(0, 0, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 40),
+        BorderSizePixel = 0,
+        Parent = self.MainFrame
+    })
+    
+    self.LogList = createInstance("ScrollingFrame", {
         Size = UDim2.new(1, 0, 1, -10),
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness = 0,
-        Parent = tabButtons
-    }
-    
-    Create("UIListLayout") {
-        Padding = UDim.new(0, 5),
-        HorizontalAlignment = Enum.HorizontalAlignment.Center,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = tabButtonHolder
-    }
-    
-    local tabsContent = Create("Frame") {
-        Name = "TabsContent",
+        Position = UDim2.new(0, 0, 0, 5),
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 130, 0, 10),
-        Size = UDim2.new(1, -140, 1, -20),
-        Parent = contentContainer
+        ScrollBarThickness = 4,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        Parent = self.LeftPanel
+    })
+    
+    self.LogLayout = createInstance("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 5),
+        Parent = self.LogList
+    })
+    
+    -- Right Panel (Details)
+    self.RightPanel = createInstance("Frame", {
+        Size = UDim2.new(1, -200, 1, -30),
+        Position = UDim2.new(0, 200, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(50, 50, 60),
+        BorderSizePixel = 0,
+        Parent = self.MainFrame
+    })
+    
+    self.CodeBox = createInstance("TextBox", {
+        Size = UDim2.new(1, 0, 0.5, 0),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 25),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.Code,
+        TextSize = 14,
+        MultiLine = true,
+        ClearTextOnFocus = false,
+        Text = "",
+        Parent = self.RightPanel
+    })
+    
+    self.ButtonFrame = createInstance("ScrollingFrame", {
+        Size = UDim2.new(1, 0, 0.5, -10),
+        Position = UDim2.new(0, 0, 0.5, 5),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 4,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        Parent = self.RightPanel
+    })
+    
+    self.ButtonLayout = createInstance("UIGridLayout", {
+        CellSize = UDim2.new(0, 100, 0, 30),
+        CellPadding = UDim2.new(0, 5, 0, 5),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = self.ButtonFrame
+    })
+    
+    -- Tooltip
+    self.Tooltip = createInstance("Frame", {
+        Size = UDim2.new(0, 200, 0, 50),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 40),
+        BackgroundTransparency = 0.1,
+        Visible = false,
+        ZIndex = 10,
+        BorderSizePixel = 0,
+        Parent = self.ScreenGui
+    })
+    
+    self.TooltipText = createInstance("TextLabel", {
+        Size = UDim2.new(1, -4, 1, -4),
+        Position = UDim2.new(0, 2, 0, 2),
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        TextWrapped = true,
+        Text = "",
+        Parent = self.Tooltip
+    })
+    
+    -- Custom Cursor
+    self.CustomCursor = createInstance("ImageLabel", {
+        Size = UDim2.new(0, 20, 0, 20),
+        BackgroundTransparency = 1,
+        Visible = false,
+        ZIndex = 11,
+        Image = "rbxassetid://6065775281",
+        Parent = self.ScreenGui
+    })
+    
+    -- Initialize all modules
+    self:Initialize()
+    self:InitializeThemeManager()
+    self:InitializeComponents()
+    self:InitializeRemoteSpy()
+    self:InitializeConfigManager()
+    self:InitializeOptimizationAndDebugging()
+    
+    return self
+end
+
+-- Initialize UI
+function Fluent:Initialize()
+    -- Dragging
+    self.TopBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            self.IsDragging = true
+            local startPos = input.Position
+            local startFramePos = self.MainFrame.Position
+            
+            local dragConnection
+            dragConnection = RunService.RenderStepped:Connect(function()
+                if not self.IsDragging then
+                    dragConnection:Disconnect()
+                    return
+                end
+                local newPos = UserInputService:GetMouseLocation()
+                local delta = newPos - startPos
+                local newX = clamp(startFramePos.X.Offset + delta.X, 0, workspace.CurrentCamera.ViewportSize.X - self.MainFrame.Size.X.Offset)
+                local newY = clamp(startFramePos.Y.Offset + delta.Y, 0, workspace.CurrentCamera.ViewportSize.Y - self.MainFrame.Size.Y.Offset)
+                self.MainFrame.Position = UDim2.new(0, newX, 0, newY)
+            end)
+            
+            self.Connections[#self.Connections + 1] = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    self.IsDragging = false
+                end
+            end)
+        end
+    end)
+    
+    -- Minimize
+    self.MinimizeButton.MouseButton1Click:Connect(function()
+        self:ToggleMinimize()
+    end)
+    
+    -- Close
+    self.CloseButton.MouseButton1Click:Connect(function()
+        self:Destroy()
+    end)
+    
+    -- Tooltip and Cursor Handling
+    self.Connections[#self.Connections + 1] = RunService.RenderStepped:Connect(function()
+        local mousePos = UserInputService:GetMouseLocation()
+        if self.Tooltip.Visible then
+            self.Tooltip.Position = UDim2.new(0, mousePos.X + 10, 0, mousePos.Y + 10)
+        end
+        
+        local inGui = self:IsMouseInGui(mousePos)
+        self.MouseInGui = inGui
+        UserInputService.MouseIconEnabled = not inGui
+        self.CustomCursor.Visible = inGui
+        if inGui then
+            self.CustomCursor.Position = UDim2.new(0, mousePos.X - 10, 0, mousePos.Y - 10)
+        end
+    end)
+    
+    -- Hover Effects
+    self.CloseButton.MouseEnter:Connect(function()
+        TweenService:Create(self.CloseButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 100, 100)}):Play()
+    end)
+    self.CloseButton.MouseLeave:Connect(function()
+        TweenService:Create(self.CloseButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 60, 60)}):Play()
+    end)
+    
+    self.MinimizeButton.MouseEnter:Connect(function()
+        TweenService:Create(self.MinimizeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 70, 80)}):Play()
+    end)
+    self.MinimizeButton.MouseLeave:Connect(function()
+        TweenService:Create(self.MinimizeButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 50, 60)}):Play()
+    end)
+end
+
+-- Toggle Minimize
+function Fluent:ToggleMinimize()
+    self.IsMinimized = not self.IsMinimized
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    if self.IsMinimized then
+        TweenService:Create(self.MainFrame, tweenInfo, {Size = MIN_WINDOW_SIZE}):Play()
+        self.LeftPanel.Visible = false
+        self.RightPanel.Visible = false
+    else
+        TweenService:Create(self.MainFrame, tweenInfo, {Size = DEFAULT_WINDOW_SIZE}):Play()
+        self.LeftPanel.Visible = true
+        self.RightPanel.Visible = true
+    end
+end
+
+-- Check if Mouse is in GUI
+function Fluent:IsMouseInGui(mousePos)
+    local pos = self.MainFrame.AbsolutePosition
+    local size = self.MainFrame.AbsoluteSize
+    return mousePos.X >= pos.X and mousePos.X <= pos.X + size.X and
+           mousePos.Y >= pos.Y and mousePos.Y <= pos.Y + size.Y
+end
+
+-- Create Button
+function Fluent:CreateButton(name, description, callback)
+    local button = createInstance("TextButton", {
+        Size = UDim2.new(0, 100, 0, 30),
+        BackgroundColor3 = Color3.fromRGB(255, 215, 0),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        Text = name,
+        Parent = self.ButtonFrame
+    })
+    
+    button.MouseEnter:Connect(function()
+        self.TooltipText.Text = description()
+        self.Tooltip.Visible = true
+        local size = TextService:GetTextSize(self.TooltipText.Text, 14, Enum.Font.SourceSans, Vector2.new(200, math.huge))
+        self.Tooltip.Size = UDim2.new(0, size.X + 4, 0, size.Y + 4)
+    end)
+    
+    button.MouseLeave:Connect(function()
+        self.Tooltip.Visible = false
+    end)
+    
+    button.MouseButton1Click:Connect(callback)
+    self.ButtonLayout:ApplyLayout()
+    self.ButtonFrame.CanvasSize = UDim2.new(0, 0, 0, self.ButtonLayout.AbsoluteContentSize.Y)
+end
+
+-- Add Log
+function Fluent:AddLog(data)
+    if #self.Logs >= MAX_LOG_SIZE then
+        table.remove(self.Logs, 1)
+        self.LogList:GetChildren()[2]:Destroy()
+    end
+    
+    local logFrame = createInstance("Frame", {
+        Size = UDim2.new(1, -10, 0, 30),
+        BackgroundTransparency = 1,
+        Parent = self.LogList
+    })
+    
+    local logButton = createInstance("TextButton", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 40),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.SourceSans,
+        TextSize = 14,
+        Text = data.Name,
+        Parent = logFrame
+    })
+    
+    local logData = {
+        Log = logFrame,
+        Button = logButton,
+        Data = data
     }
+    table.insert(self.Logs, logData)
     
-    -- Create tab handler
-    local currentTab = nil
-    local tabCount = 0
-    local window = {
-        Tabs = {},
-        Container = mainFrame,
-        GUI = smoothGui
-    }
+    logButton.MouseButton1Click:Connect(function()
+        self:SelectLog(logData)
+    end)
     
-    window.SetTitle = function(newTitle)
-        titleText.Text = newTitle
+    self.LogLayout:ApplyLayout()
+    self.LogList.CanvasSize = UDim2.new(0, 0, 0, self.LogLayout.AbsoluteContentSize.Y)
+end
+
+-- Select Log
+function Fluent:SelectLog(log)
+    if self.SelectedLog then
+        self.SelectedLog.Button.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     end
-    
-    window.ToggleVisibility = function()
-        self.Toggled = not self.Toggled
-        mainFrame.Visible = self.Toggled
+    self.SelectedLog = log
+    log.Button.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+    self.CodeBox.Text = log.Data.Script or "No script available"
+end
+
+-- Destroy UI
+function Fluent:Destroy()
+    for _, conn in pairs(self.Connections) do
+        conn:Disconnect()
     end
+    self.ScreenGui:Destroy()
+end
+
+-- Initialize Theme Manager
+function Fluent:InitializeThemeManager()
+    self.ThemeManager = ThemeManager.new()
     
-    -- Add keybind functionality to toggle the UI
-    if config.ToggleKey then
-        UserInputService.InputBegan:Connect(function(input, processed)
-            if not processed and input.KeyCode == config.ToggleKey then
-                window.ToggleVisibility()
-            end
-        end)
+    -- Register core UI elements
+    self.ThemeManager:RegisterInstance(self.MainFrame, {BackgroundColor3 = "Background", BackgroundTransparency = "Transparency"})
+    self.ThemeManager:RegisterInstance(self.TopBar, {BackgroundColor3 = "Secondary"})
+    self.ThemeManager:RegisterInstance(self.Title, {TextColor3 = "Text"})
+    self.ThemeManager:RegisterInstance(self.CloseButton, {TextColor3 = "Text"})
+    self.ThemeManager:RegisterInstance(self.MinimizeButton, {BackgroundColor3 = "Accent", TextColor3 = "Text"})
+    self.ThemeManager:RegisterInstance(self.LeftPanel, {BackgroundColor3 = "Secondary"})
+    self.ThemeManager:RegisterInstance(self.RightPanel, {BackgroundColor3 = "Accent"})
+    self.ThemeManager:RegisterInstance(self.CodeBox, {TextColor3 = "Text"})
+    self.ThemeManager:RegisterInstance(self.Tooltip, {BackgroundColor3 = "Secondary", BackgroundTransparency = "Transparency"})
+    self.ThemeManager:RegisterInstance(self.TooltipText, {TextColor3 = "Text"})
+    
+    -- Apply initial theme
+    self.ThemeManager:SetTheme(self.Config.Theme)
+    
+    -- Add acrylic effect if enabled
+    if self.Config.Acrylic then
+        self.ThemeManager:CreateAcrylicEffect(self.MainFrame)
     end
+end
+
+function Fluent:UpdateTheme(themeName)
+    self.Config.Theme = themeName
+    self.ThemeManager:SetTheme(themeName)
     
-    -- Tab creation function
-    function window:CreateTab(tabConfig)
-        tabConfig = tabConfig or {}
-        tabConfig.Title = tabConfig.Title or "Tab"
-        tabConfig.Icon = tabConfig.Icon or ""
-        
-        tabCount = tabCount + 1
-        
-        -- Create tab button
-        local tabButton = Create("TextButton") {
-            Name = "Tab_" .. tabConfig.Title,
-            BackgroundColor3 = self.Theme.Primary,
-            BorderSizePixel = 0,
-            Size = UDim2.new(0, 100, 0, 30),
-            Font = Enum.Font.Gotham,
-            Text = tabConfig.Title,
-            TextColor3 = self.Theme.DarkTextColor,
-            TextSize = 12,
-            LayoutOrder = tabCount,
-            Parent = tabButtonHolder
-        }
-        
-        Create("UICorner") {
-            CornerRadius = UDim.new(0, 6),
-            Parent = tabButton
-        }
-        
-        -- Create tab content
-        local tabFrame = Create("ScrollingFrame") {
-            Name = "TabContent_" .. tabConfig.Title,
-            Active = true,
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Position = UDim2.new(0, 0, 0, 0),
-            Size = UDim2.new(1, 0, 1, 0),
-            CanvasSize = UDim2.new(0, 0, 0, 0),
-            ScrollBarThickness = 3,
-            ScrollBarImageColor3 = self.Theme.Accent,
-            Visible = false,
-            Parent = tabsContent
-        }
-        
-        local contentPadding = Create("UIPadding") {
-            PaddingLeft = UDim.new(0, 10),
-            PaddingRight = UDim.new(0, 10),
-            PaddingTop = UDim.new(0, 5),
-            PaddingBottom = UDim.new(0, 5),
-            Parent = tabFrame
-        }
-        
-        local contentList = Create("UIListLayout") {
-            Padding = UDim.new(0, 10),
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Parent = tabFrame
-        }
-        
-        contentList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            tabFrame.CanvasSize = UDim2.new(0, 0, 0, contentList.AbsoluteContentSize.Y + 10)
-        end)
-        
-        tabButton.MouseButton1Click:Connect(function()
-            if currentTab == tabFrame then return end
-            
-            -- Update button styles
-            for _, button in pairs(tabButtonHolder:GetChildren()) do
-                if button:IsA("TextButton") then
-                    Tween(button, {
-                        BackgroundColor3 = self.Theme.Primary,
-                        TextColor3 = self.Theme.DarkTextColor
-                    }, 0.2)
-                end
-            end
-            
-            Tween(tabButton, {
-                BackgroundColor3 = self.Theme.Accent,
-                TextColor3 = self.Theme.TextColor
-            }, 0.2)
-            
-            if currentTab then
-                currentTab.Visible = false
-            end
-            
-            tabFrame.Visible = true
-            currentTab = tabFrame
-            Ripple(tabButton)
-        end)
-        
-        local tab = {
-            Container = tabFrame,
-            Elements = {},
-            ElementCount = 0
-        }
-        
-        function tab:AddLabel(labelConfig)
-            labelConfig = labelConfig or {}
-            labelConfig.Text = labelConfig.Text or "Label"
-            
-            self.ElementCount = self.ElementCount + 1
-            
-            local labelFrame = Create("Frame") {
-                Name = "Label",
-                BackgroundColor3 = self.Theme.ElementBackground,
-                Size = UDim2.new(1, 0, 0, 30),
-                LayoutOrder = self.ElementCount,
-                Parent = self.Container
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(0, 6),
-                Parent = labelFrame
-            }
-            
-            local label = Create("TextLabel") {
-                Name = "LabelText",
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 10, 0, 0),
-                Size = UDim2.new(1, -20, 1, 0),
-                Font = Enum.Font.Gotham,
-                Text = labelConfig.Text,
-                TextColor3 = self.Theme.TextColor,
-                TextSize = 14,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = labelFrame
-            }
-            
-            local labelElement = {
-                Instance = labelFrame,
-                Type = "Label"
-            }
-            
-            labelElement.SetText = function(text)
-                label.Text = text
-            end
-            
-            table.insert(self.Elements, labelElement)
-            return labelElement
-        end
-        
-        function tab:AddButton(buttonConfig)
-            buttonConfig = buttonConfig or {}
-            buttonConfig.Title = buttonConfig.Title or "Button"
-            buttonConfig.Callback = buttonConfig.Callback or function() end
-            
-            self.ElementCount = self.ElementCount + 1
-            
-            local buttonFrame = Create("Frame") {
-                Name = "Button",
-                BackgroundColor3 = self.Theme.ElementBackground,
-                Size = UDim2.new(1, 0, 0, 40),
-                LayoutOrder = self.ElementCount,
-                Parent = self.Container
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(0, 6),
-                Parent = buttonFrame
-            }
-            
-            local buttonTitle = Create("TextLabel") {
-                Name = "ButtonTitle",
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 10, 0, 0),
-                Size = UDim2.new(1, -20, 0.5, 0),
-                Font = Enum.Font.GothamSemibold,
-                Text = buttonConfig.Title,
-                TextColor3 = self.Theme.TextColor,
-                TextSize = 14,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = buttonFrame
-            }
-            
-            local buttonDescription
-            if buttonConfig.Description then
-                buttonDescription = Create("TextLabel") {
-                    Name = "ButtonDescription",
-                    BackgroundTransparency = 1,
-                    Position = UDim2.new(0, 10, 0.5, 0),
-                    Size = UDim2.new(1, -20, 0.5, 0),
-                    Font = Enum.Font.Gotham,
-                    Text = buttonConfig.Description,
-                    TextColor3 = self.Theme.DarkTextColor,
-                    TextSize = 12,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    Parent = buttonFrame
-                }
-            end
-            
-            local actionButton = Create("TextButton") {
-                Name = "ActionButton",
-                AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = self.Theme.Accent,
-                Position = UDim2.new(1, -10, 0.5, 0),
-                Size = UDim2.new(0, 80, 0, 26),
-                Font = Enum.Font.Gotham,
-                Text = buttonConfig.ButtonText or "Execute",
-                TextColor3 = self.Theme.TextColor,
-                TextSize = 12,
-                AutoButtonColor = false,
-                Parent = buttonFrame
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(0, 4),
-                Parent = actionButton
-            }
-            
-            actionButton.MouseEnter:Connect(function()
-                Tween(actionButton, {
-                    BackgroundColor3 = Color3.fromRGB(
-                        math.clamp(self.Theme.Accent.R * 1.1 * 255, 0, 255) / 255,
-                        math.clamp(self.Theme.Accent.G * 1.1 * 255, 0, 255) / 255,
-                        math.clamp(self.Theme.Accent.B * 1.1 * 255, 0, 255) / 255
-                    )
-                }, 0.2)
-            end)
-            
-            actionButton.MouseLeave:Connect(function()
-                Tween(actionButton, {BackgroundColor3 = self.Theme.Accent}, 0.2)
-            end)
-            
-            actionButton.MouseButton1Click:Connect(function()
-                Ripple(actionButton)
-                buttonConfig.Callback()
-            end)
-            
-            local buttonElement = {
-                Instance = buttonFrame,
-                Type = "Button"
-            }
-            
-            buttonElement.SetTitle = function(text)
-                buttonTitle.Text = text
-            end
-            
-            if buttonDescription then
-                buttonElement.SetDescription = function(text)
-                    buttonDescription.Text = text
-                end
-            end
-            
-            table.insert(self.Elements, buttonElement)
-            return buttonElement
-        end
-        
-        function tab:AddSlider(sliderConfig)
-            sliderConfig = sliderConfig or {}
-            sliderConfig.Title = sliderConfig.Title or "Slider"
-            sliderConfig.Min = sliderConfig.Min or 0
-            sliderConfig.Max = sliderConfig.Max or 100
-            sliderConfig.Default = sliderConfig.Default or sliderConfig.Min
-            sliderConfig.Increment = sliderConfig.Increment or 1
-            sliderConfig.Callback = sliderConfig.Callback or function() end
-            sliderConfig.Flag = sliderConfig.Flag or nil
-            
-            sliderConfig.Default = math.clamp(sliderConfig.Default, sliderConfig.Min, sliderConfig.Max)
-            sliderConfig.Default = sliderConfig.Min + (math.round((sliderConfig.Default - sliderConfig.Min) / sliderConfig.Increment) * sliderConfig.Increment)
-            
-            self.ElementCount = self.ElementCount + 1
-            
-            local sliderFrame = Create("Frame") {
-                Name = "Slider",
-                BackgroundColor3 = self.Theme.ElementBackground,
-                Size = UDim2.new(1, 0, 0, 60),
-                LayoutOrder = self.ElementCount,
-                Parent = self.Container
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(0, 6),
-                Parent = sliderFrame
-            }
-            
-            local sliderTitle = Create("TextLabel") {
-                Name = "SliderTitle",
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 10, 0, 5),
-                Size = UDim2.new(1, -20, 0, 20),
-                Font = Enum.Font.GothamSemibold,
-                Text = sliderConfig.Title,
-                TextColor3 = self.Theme.TextColor,
-                TextSize = 14,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = sliderFrame
-            }
-            
-            local sliderBackground = Create("Frame") {
-                Name = "SliderBackground",
-                BackgroundColor3 = Color3.fromRGB(40, 40, 50),
-                Position = UDim2.new(0, 10, 0, 35),
-                Size = UDim2.new(1, -100, 0, 6),
-                Parent = sliderFrame
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(1, 0),
-                Parent = sliderBackground
-            }
-            
-            local sliderFill = Create("Frame") {
-                Name = "SliderFill",
-                BackgroundColor3 = self.Theme.Accent,
-                Size = UDim2.new((sliderConfig.Default - sliderConfig.Min) / (sliderConfig.Max - sliderConfig.Min), 0, 1, 0),
-                Parent = sliderBackground
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(1, 0),
-                Parent = sliderFill
-            }
-            
-            local sliderValue = Create("TextBox") {
-                Name = "SliderValue",
-                AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = self.Theme.Primary,
-                Position = UDim2.new(1, -10, 0, 35),
-                Size = UDim2.new(0, 70, 0, 20),
-                Font = Enum.Font.Gotham,
-                Text = tostring(sliderConfig.Default),
-                TextColor3 = self.Theme.TextColor,
-                TextSize = 12,
-                ClipsDescendants = true,
-                Parent = sliderFrame
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(0, 4),
-                Parent = sliderValue
-            }
-            
-            local value = sliderConfig.Default
-            local sliderElement = {
-                Instance = {
-                    SliderFill = sliderFill,
-                    SliderValue = sliderValue
-                },
-                Type = "Slider",
-                Value = value,
-                Min = sliderConfig.Min,
-                Max = sliderConfig.Max
-            }
-            
-            local isDragging = false
-            
-            sliderBackground.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    isDragging = true
-                    local relativePos = math.clamp((input.Position.X - sliderBackground.AbsolutePosition.X) / sliderBackground.AbsoluteSize.X, 0, 1)
-                    local exactValue = sliderConfig.Min + ((sliderConfig.Max - sliderConfig.Min) * relativePos)
-                    local roundedValue = sliderConfig.Min + (math.round((exactValue - sliderConfig.Min) / sliderConfig.Increment) * sliderConfig.Increment)
-                    
-                    value = math.clamp(roundedValue, sliderConfig.Min, sliderConfig.Max)
-                    sliderElement.Value = value
-                    
-                    local percent = (value - sliderConfig.Min) / (sliderConfig.Max - sliderConfig.Min)
-                    Tween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}, 0.1)
-                    sliderValue.Text = tostring(value)
-                    
-                    sliderConfig.Callback(value)
-                    
-                    if sliderConfig.Flag then
-                        SmoothHub.Flags[sliderConfig.Flag] = {
-                            Type = "Slider",
-                            Value = value,
-                            Instance = sliderElement.Instance,
-                            Min = sliderConfig.Min,
-                            Max = sliderConfig.Max,
-                            Callback = sliderConfig.Callback
-                        }
-                    end
-                end
-            end)
-            
-            UserInputService.InputChanged:Connect(function(input)
-                if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                    local relativePos = math.clamp((input.Position.X - sliderBackground.AbsolutePosition.X) / sliderBackground.AbsoluteSize.X, 0, 1)
-                    local exactValue = sliderConfig.Min + ((sliderConfig.Max - sliderConfig.Min) * relativePos)
-                    local roundedValue = sliderConfig.Min + (math.round((exactValue - sliderConfig.Min) / sliderConfig.Increment) * sliderConfig.Increment)
-                    
-                    value = math.clamp(roundedValue, sliderConfig.Min, sliderConfig.Max)
-                    sliderElement.Value = value
-                    
-                    local percent = (value - sliderConfig.Min) / (sliderConfig.Max - sliderConfig.Min)
-                    sliderFill.Size = UDim2.new(percent, 0, 1, 0)
-                    sliderValue.Text = tostring(value)
-                    
-                    sliderConfig.Callback(value)
-                    
-                    if sliderConfig.Flag then
-                        SmoothHub.Flags[sliderConfig.Flag].Value = value
-                    end
-                end
-            end)
-            
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    isDragging = false
-                end
-            end)
-            
-            sliderValue.FocusLost:Connect(function(enterPressed)
-                if enterPressed then
-                    local inputValue = tonumber(sliderValue.Text)
-                    if inputValue then
-                        local roundedValue = sliderConfig.Min + (math.round((inputValue - sliderConfig.Min) / sliderConfig.Increment) * sliderConfig.Increment)
-                        value = math.clamp(roundedValue, sliderConfig.Min, sliderConfig.Max)
-                        sliderElement.Value = value
-                        
-                        local percent = (value - sliderConfig.Min) / (sliderConfig.Max - sliderConfig.Min)
-                        Tween(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}, 0.2)
-                        sliderValue.Text = tostring(value)
-                        
-                        sliderConfig.Callback(value)
-                        
-                        if sliderConfig.Flag then
-                            SmoothHub.Flags[sliderConfig.Flag].Value = value
-                        end
-                    else
-                        sliderValue.Text = tostring(value)
-                    end
-                end
-            end)
-            
-            if sliderConfig.Flag then
-                SmoothHub.Flags[sliderConfig.Flag] = {
-                    Type = "Slider",
-                    Value = value,
-                    Instance = sliderElement.Instance,
-                    Min = sliderConfig.Min,
-                    Max = sliderConfig.Max,
-                    Callback = sliderConfig.Callback
-                }
-            end
-            
-            table.insert(self.Elements, sliderElement)
-            return sliderElement
-        end
-        
-        function tab:AddDropdown(dropdownConfig)
-            dropdownConfig = dropdownConfig or {}
-            dropdownConfig.Title = dropdownConfig.Title or "Dropdown"
-            dropdownConfig.Options = dropdownConfig.Options or {}
-            dropdownConfig.Default = dropdownConfig.Default or (dropdownConfig.Options[1] or "")
-            dropdownConfig.Callback = dropdownConfig.Callback or function() end
-            dropdownConfig.Flag = dropdownConfig.Flag or nil
-            
-            self.ElementCount = self.ElementCount + 1
-            
-            local dropdownFrame = Create("Frame") {
-                Name = "Dropdown",
-                BackgroundColor3 = self.Theme.ElementBackground,
-                Size = UDim2.new(1, 0, 0, 40),
-                LayoutOrder = self.ElementCount,
-                ClipsDescendants = true,
-                Parent = self.Container
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(0, 6),
-                Parent = dropdownFrame
-            }
-            
-            local dropdownTitle = Create("TextLabel") {
-                Name = "DropdownTitle",
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 10, 0, 0),
-                Size = UDim2.new(1, -20, 0.5, 0),
-                Font = Enum.Font.GothamSemibold,
-                Text = dropdownConfig.Title,
-                TextColor3 = self.Theme.TextColor,
-                TextSize = 14,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = dropdownFrame
-            }
-            
-            local dropdownButton = Create("TextButton") {
-                Name = "DropdownButton",
-                BackgroundColor3 = self.Theme.Primary,
-                Position = UDim2.new(0, 10, 0.5, 5),
-                Size = UDim2.new(1, -20, 0, 25),
-                Font = Enum.Font.Gotham,
-                Text = "",
-                TextColor3 = self.Theme.TextColor,
-                TextSize = 12,
-                AutoButtonColor = false,
-                Parent = dropdownFrame
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(0, 4),
-                Parent = dropdownButton
-            }
-            
-            local dropdownSelection = Create("TextLabel") {
-                Name = "DropdownSelection",
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 8, 0, 0),
-                Size = UDim2.new(1, -38, 1, 0),
-                Font = Enum.Font.Gotham,
-                Text = dropdownConfig.Default,
-                TextColor3 = self.Theme.TextColor,
-                TextSize = 12,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = dropdownButton
-            }
-            
-            local dropdownArrow = Create("TextLabel") {
-                Name = "DropdownArrow",
-                AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundTransparency = 1,
-                Position = UDim2.new(1, -5, 0.5, 0),
-                Size = UDim2.new(0, 20, 0, 20),
-                Font = Enum.Font.Gotham,
-                Text = "▼",
-                TextColor3 = self.Theme.DarkTextColor,
-                TextSize = 12,
-                Parent = dropdownButton
-            }
-            
-            local optionsFrame = Create("Frame") {
-                Name = "OptionsFrame",
-                BackgroundColor3 = self.Theme.Primary,
-                Position = UDim2.new(0, 10, 0, 40),
-                Size = UDim2.new(1, -20, 0, 0),
-                ClipsDescendants = true,
-                Parent = dropdownFrame
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(0, 4),
-                Parent = optionsFrame
-            }
-            
-            local optionsList = Create("ScrollingFrame") {
-                Name = "OptionsList",
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                Position = UDim2.new(0, 0, 0, 0),
-                Size = UDim2.new(1, 0, 1, 0),
-                CanvasSize = UDim2.new(0, 0, 0, 0),
-                ScrollBarThickness = 3,
-                ScrollBarImageColor3 = self.Theme.Accent,
-                Parent = optionsFrame
-            }
-            
-            local optionsLayout = Create("UIListLayout") {
-                Padding = UDim.new(0, 2),
-                SortOrder = Enum.SortOrder.LayoutOrder,
-                Parent = optionsList
-            }
-            
-            local optionsHeight = 0
-            for _, option in pairs(dropdownConfig.Options) do
-                local optionButton = Create("TextButton") {
-                    Name = "Option",
-                    BackgroundTransparency = 1,
-                    Size = UDim2.new(1, 0, 0, 25),
-                    Font = Enum.Font.Gotham,
-                    Text = option,
-                    TextColor3 = self.Theme.TextColor,
-                    TextSize = 12,
-                    Parent = optionsList
-                }
-                
-                optionButton.MouseEnter:Connect(function()
-                    Tween(optionButton, {BackgroundTransparency = 0.9}, 0.2)
-                end)
-                
-                optionButton.MouseLeave:Connect(function()
-                    Tween(optionButton, {BackgroundTransparency = 1}, 0.2)
-                end)
-                
-                optionButton.MouseButton1Click:Connect(function()
-                    dropdownSelection.Text = option
-                    dropdownConfig.Callback(option)
-                    
-                    if dropdownConfig.Flag then
-                        SmoothHub.Flags[dropdownConfig.Flag].Value = option
-                    end
-                    
-                    Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 40)}, 0.3)
-                    Tween(optionsFrame, {Size = UDim2.new(1, -20, 0, 0)}, 0.3)
-                    Tween(dropdownArrow, {Rotation = 0}, 0.3)
-                end)
-                
-                optionsHeight = optionsHeight + 27
-            end
-            
-            optionsList.CanvasSize = UDim2.new(0, 0, 0, optionsHeight)
-            
-            local maxDisplayedOptions = 5
-            local maxHeight = math.min(25 * maxDisplayedOptions, optionsHeight)
-            
-            local isOpen = false
-            dropdownButton.MouseButton1Click:Connect(function()
-                isOpen = not isOpen
-                
-                if isOpen then
-                    Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 40 + maxHeight + 10)}, 0.3)
-                    Tween(optionsFrame, {Size = UDim2.new(1, -20, 0, maxHeight)}, 0.3)
-                    Tween(dropdownArrow, {Rotation = 180}, 0.3)
-                else
-                    Tween(dropdownFrame, {Size = UDim2.new(1, 0, 0, 40)}, 0.3)
-                    Tween(optionsFrame, {Size = UDim2.new(1, -20, 0, 0)}, 0.3)
-                    Tween(dropdownArrow, {Rotation = 0}, 0.3)
-                end
-            end)
-            
-            local value = dropdownConfig.Default
-            local dropdownElement = {
-                Instance = {
-                    DropdownSelection = dropdownSelection
-                },
-                Type = "Dropdown",
-                Value = value
-            }
-            
-            if dropdownConfig.Flag then
-                SmoothHub.Flags[dropdownConfig.Flag] = {
-                    Type = "Dropdown",
-                    Value = value,
-                    Instance = dropdownElement.Instance,
-                    Callback = dropdownConfig.Callback
-                }
-            end
-            
-            table.insert(self.Elements, dropdownElement)
-            return dropdownElement
-        end
-        
-        function tab:AddToggle(toggleConfig)
-            toggleConfig = toggleConfig or {}
-            toggleConfig.Title = toggleConfig.Title or "Toggle"
-            toggleConfig.Default = toggleConfig.Default or false
-            toggleConfig.Callback = toggleConfig.Callback or function() end
-            toggleConfig.Flag = toggleConfig.Flag or nil
-            
-            self.ElementCount = self.ElementCount + 1
-            
-            local toggleFrame = Create("Frame") {
-                Name = "Toggle",
-                BackgroundColor3 = self.Theme.ElementBackground,
-                Size = UDim2.new(1, 0, 0, 40),
-                LayoutOrder = self.ElementCount,
-                Parent = self.Container
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(0, 6),
-                Parent = toggleFrame
-            }
-            
-            local toggleTitle = Create("TextLabel") {
-                Name = "ToggleTitle",
-                BackgroundTransparency = 1,
-                Position = UDim2.new(0, 10, 0, 0),
-                Size = UDim2.new(1, -70, 0.5, 0),
-                Font = Enum.Font.GothamSemibold,
-                Text = toggleConfig.Title,
-                TextColor3 = self.Theme.TextColor,
-                TextSize = 14,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = toggleFrame
-            }
-            
-            local toggleDescription
-            if toggleConfig.Description then
-                toggleDescription = Create("TextLabel") {
-                    Name = "ToggleDescription",
-                    BackgroundTransparency = 1,
-                    Position = UDim2.new(0, 10, 0.5, 0),
-                    Size = UDim2.new(1, -70, 0.5, 0),
-                    Font = Enum.Font.Gotham,
-                    Text = toggleConfig.Description,
-                    TextColor3 = self.Theme.DarkTextColor,
-                    TextSize = 12,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    Parent = toggleFrame
-                }
-            end
-            
-            local toggleBackground = Create("Frame") {
-                Name = "Toggle",
-                AnchorPoint = Vector2.new(1, 0.5),
-                BackgroundColor3 = toggleConfig.Default and self.Theme.Accent or self.Theme.ElementBackground,
-                Position = UDim2.new(1, -10, 0.5, 0),
-                Size = UDim2.new(0, 40, 0, 20),
-                Parent = toggleFrame
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(1, 0),
-                Parent = toggleBackground
-            }
-            
-            local toggleCircle = Create("Frame") {
-                Name = "ToggleCircle",
-                AnchorPoint = Vector2.new(toggleConfig.Default and 1 or 0, 0.5),
-                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-                Position = UDim2.new(toggleConfig.Default and 1 or 0, toggleConfig.Default and -2 or 2, 0.5, 0),
-                Size = UDim2.new(0, 16, 0, 16),
-                Parent = toggleBackground
-            }
-            
-            Create("UICorner") {
-                CornerRadius = UDim.new(1, 0),
-                Parent = toggleCircle
-            }
-            
-            local value = toggleConfig.Default
-            local toggleElement = {
-                Instance = {
-                    Toggle = toggleBackground,
-                    ToggleCircle = toggleCircle
-                },
-                Type = "Toggle",
-                Value = value
-            }
-            
-            toggleBackground.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    value = not value
-                    toggleElement.Value = value
-                    
-                    Tween(toggleBackground, {BackgroundColor3 = value and self.Theme.Accent or self.Theme.ElementBackground}, 0.2)
-                    Tween(toggleCircle, {
-                        Position = value and UDim2.new(1, -2, 0.5, 0) or UDim2.new(0, 2, 0.5, 0),
-                        AnchorPoint = value and Vector2.new(1, 0.5) or Vector2.new(0, 0.5)
-                    }, 0.2)
-                    
-                    toggleConfig.Callback(value)
-                    
-                    if toggleConfig.Flag then
-                        SmoothHub.Flags[toggleConfig.Flag] = {
-                            Type = "Toggle",
-                            Value = value,
-                            Instance = toggleElement.Instance,
-                            Callback = toggleConfig.Callback
-                        }
-                    end
-                end
-            end)
-            
-            if toggleConfig.Flag then
-                SmoothHub.Flags[toggleConfig.Flag] = {
-                    Type = "Toggle",
-                    Value = value,
-                    Instance = toggleElement.Instance,
-                    Callback = toggleConfig.Callback
-                }
-            end
-            
-            table.insert(self.Elements, toggleElement)
-            return toggleElement
-        end
+    -- Update particle system color if exists
+    if self.ParticleEffect then
+        self.ParticleEffect.color = Themes[themeName].Primary
     end
+end
+
+-- Initialize Components
+function Fluent:InitializeComponents()
+    self.NotificationSystem = NotificationSystem.new(self)
     
-    return SmoothHub
+    -- Replace CreateButton with Component version
+    self.CreateButton = function(self, name, description, callback)
+        local button = Button.new(self, {
+            Parent = self.ButtonFrame,
+            Text = name,
+            Description = description,
+            Callback = callback
+        })
+        self.ButtonLayout:ApplyLayout()
+        self.ButtonFrame.CanvasSize = UDim2.new(0, 0, 0, self.ButtonLayout.AbsoluteContentSize.Y)
+        return button
+    end
+end
+
+-- Initialize Remote Spy
+function Fluent:InitializeRemoteSpy()
+    self.RemoteSpy = RemoteSpy.new(self)
+    
+    -- Add Remote Spy buttons
+    self:CreateButton("Copy Code", function()
+        return "Copy the selected remote call script to clipboard"
+    end, function()
+        if self.SelectedLog then
+            setclipboard(self.SelectedLog.Data.Script)
+            self.NotificationSystem:Notify({
+                Title = "Copied",
+                Message = "Script copied to clipboard!",
+                Duration = 2
+            })
+        end
+    end)
+    
+    self:CreateButton("Run Code", function()
+        return "Execute the selected remote call script"
+    end, function()
+        if self.SelectedLog then
+            local success, err = pcall(function()
+                loadstring(self.SelectedLog.Data.Script)()
+            end)
+            if not success then
+                self.NotificationSystem:Notify({
+                    Title = "Error",
+                    Message = "Failed to run script: " .. err,
+                    Duration = 3
+                })
+            else
+                self.NotificationSystem:Notify({
+                    Title = "Success",
+                    Message = "Script executed successfully!",
+                    Duration = 2
+                })
+            end
+        end
+    end)
+    
+    self:CreateButton("Exclude", function()
+        return "Exclude this remote from logging"
+    end, function()
+        if self.SelectedLog then
+            local remote = game:FindFirstChild(self.SelectedLog.Data.Path, true)
+            if remote then
+                self.RemoteSpy:Exclude(remote)
+                table.insert(self.ConfigManager.CurrentConfig.ExcludedRemotes, remote:GetFullName())
+                self.ConfigManager:SaveConfig()
+                self.NotificationSystem:Notify({
+                    Title = "Excluded",
+                    Message = self.SelectedLog.Data.Name .. " excluded from logging",
+                    Duration = 2
+                })
+            end
+        end
+    end)
+    
+    self:CreateButton("Block", function()
+        return "Block this remote from firing"
+    end, function()
+        if self.SelectedLog then
+            local remote = game:FindFirstChild(self.SelectedLog.Data.Path, true)
+            if remote then
+                self.RemoteSpy:Block(remote)
+                table.insert(self.ConfigManager.CurrentConfig.BlockedRemotes, remote:GetFullName())
+                self.ConfigManager:SaveConfig()
+                self.NotificationSystem:Notify({
+                    Title = "Blocked",
+                    Message = self.SelectedLog.Data.Name .. " blocked",
+                    Duration = 2
+                })
+            end
+        end
+    end)
+    
+    self:CreateButton("Clear Logs", function()
+        return "Clear all logged remote calls"
+    end, function()
+        for _, log in pairs(self.Logs) do
+            log.Log:Destroy()
+        end
+        self.Logs = {}
+        self.RemoteSpy.Logs = {}
+        self.SelectedLog = nil
+        self.CodeBox.Text = ""
+        self.NotificationSystem:Notify({
+            Title = "Cleared",
+            Message = "All logs cleared",
+            Duration = 2
+        })
+    end)
+end
+
+-- Initialize Config Manager
+function Fluent:InitializeConfigManager()
+    self.ConfigManager = ConfigManager.new(self)
+    
+    -- Update config when UI state changes
+    self.Connections[#self.Connections + 1] = self.MainFrame:GetPropertyChangedSignal("Position"):Connect(function()
+        self.ConfigManager.CurrentConfig.WindowPosition = {
+            X = self.MainFrame.Position.X.Scale,
+            Y = self.MainFrame.Position.Y.Scale,
+            XOffset = self.MainFrame.Position.X.Offset,
+            YOffset = self.MainFrame.Position.Y.Offset
+        }
+        self.ConfigManager:SaveConfig()
+    end)
+    
+    -- Add config buttons
+    self:CreateButton("Save Config", function()
+        return "Save current UI configuration"
+    end, function()
+        self.ConfigManager:SaveConfig()
+    end)
+    
+    self:CreateButton("Load Config", function()
+        return "Load saved UI configuration"
+    end, function()
+        self.ConfigManager:LoadConfig()
+    end)
+    
+    self:CreateButton("Reset Config", function()
+        return "Reset to default configuration"
+    end, function()
+        self.ConfigManager.CurrentConfig = deepCopy(self.ConfigManager.DefaultConfig)
+        self.ConfigManager:ApplyConfig()
+        self.ConfigManager:SaveConfig()
+        self.NotificationSystem:Notify({
+            Title = "Reset",
+            Message = "Configuration reset to default",
+            Duration = 2
+        })
+    end)
+end
+
+-- Initialize Optimization and Debugging
+function Fluent:InitializeOptimizationAndDebugging()
+    self.PerformanceMonitor = PerformanceMonitor.new(self)
+    self.DebugConsole = DebugConsole.new(self)
+    
+    -- Add debug buttons
+    self:CreateButton("Show FPS", function()
+        return "Display current FPS"
+    end, function()
+        local fps = self.PerformanceMonitor:GetFPS()
+        self.NotificationSystem:Notify({
+            Title = "FPS",
+            Message = "Current FPS: " .. string.format("%.2f", fps),
+            Duration = 2
+        })
+    end)
+    
+    self:CreateButton("Show Memory", function()
+        return "Display current memory usage"
+    end, function()
+        local mem = self.PerformanceMonitor:GetMemoryUsage()
+        self.NotificationSystem:Notify({
+            Title = "Memory",
+            Message = "Memory Usage: " .. string.format("%.2f MB", mem),
+            Duration = 2
+        })
+    end)
+    
+    self:CreateButton("Force GC", function()
+        return "Force garbage collection"
+    end, function()
+        Optimization.GarbageCollect()
+        self.NotificationSystem:Notify({
+            Title = "GC",
+            Message = "Garbage collection forced",
+            Duration = 2
+        })
+    end)
+    
+    self:CreateButton("Toggle Debug", function()
+        return "Show/hide debug console"
+    end, function()
+        self.DebugConsole.Frame.Visible = not self.DebugConsole.Frame.Visible
+    end)
+end
+
+-- Modified SelectLog to include more details
+function Fluent:SelectLog(log)
+    if self.SelectedLog then
+        self.SelectedLog.Button.BackgroundColor3 = Themes[self.Config.Theme].Secondary
+    end
+    self.SelectedLog = log
+    log.Button.BackgroundColor3 = Themes[self.Config.Theme].Primary
+    
+    local detailedText = "-- Remote Call Details\n"
+    detailedText = detailedText .. "Name: " .. log.Data.Name .. "\n"
+    detailedText = detailedText .. "Path: " .. log.Data.Path .. "\n"
+    detailedText = detailedText .. "Method: " .. log.Data.Method .. "\n"
+    detailedText = detailedText .. "Caller: " .. tostring(log.Data.Caller) .. "\n"
+    detailedText = detailedText .. "Timestamp: " .. os.date("%c", log.Data.Timestamp) .. "\n"
+    detailedText = detailedText .. "Arguments:\n" .. self.RemoteSpy:Serialize(log.Data.Args) .. "\n\n"
+    detailedText = detailedText .. "-- Generated Script\n" .. log.Data.Script
+    self.CodeBox.Text = detailedText
+end
+
+-- Return the Fluent class
+return Fluent
