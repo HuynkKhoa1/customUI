@@ -6294,7 +6294,7 @@ task.delay(0.1, function()
 	local logo = Instance.new("ImageLabel")
 	logo.Name = "KoalaHubLogo"
 	logo.Size = UDim2.new(0, 20, 0, 20)
-	logo.Position = UDim2.new(0, -24, 0.5, -10) -- chèn sát trái label
+	logo.Position = UDim2.new(0, 12, 0, 6)
 	logo.BackgroundTransparency = 1
 	logo.Image = "rbxassetid://94361536997609"
 	logo.ZIndex = 999
@@ -6302,11 +6302,7 @@ task.delay(0.1, function()
 	local aspect = Instance.new("UIAspectRatioConstraint")
 	aspect.Parent = logo
 
-	logo.Parent = Window.TitleBar.TitleLabel -- gắn vô label
-
-	-- Dời text sang phải để tránh đè logo
-	Window.TitleBar.TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-	Window.TitleBar.TitleLabel.Position = UDim2.new(0, 26, 0, 0)
+	logo.Parent = Window.TitleBar.Instance
 end)
 
 	return Window
