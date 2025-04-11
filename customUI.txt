@@ -6290,15 +6290,7 @@ function Library:CreateWindow(Config)
 	InterfaceManager:SetTheme(Config.Theme)
 	Library:SetTheme(Config.Theme)
 
-		-- Thêm Koala Logo vào top-left góc GUI
-	task.delay(0.1, function()
-		local logo = Instance.new("ImageLabel")
-		logo.Name = "KoalaHubLogo"
-		logo.Size = UDim2.new(0, 40, 0, 40)
-		logo.Position = UDim2.new(0, 10, 0, 10)
-		logo.BackgroundTransparency = 1
-		logo.Image = "rbxassetid://9436153699609"
-		logo.ZIndex = 999
+
 
 		local aspect = Instance.new("UIAspectRatioConstraint")
 		aspect.Parent = logo
