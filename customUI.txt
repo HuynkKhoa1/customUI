@@ -6289,6 +6289,27 @@ function Library:CreateWindow(Config)
 	Library.Window = Window
 	InterfaceManager:SetTheme(Config.Theme)
 	Library:SetTheme(Config.Theme)
+	
+	-- Thêm Koala Logo vào top-left góc GUI
+	local logo = Instance.new("ImageLabel")
+	logo.Name = "KoalaHubLogo"
+	logo.Size = UDim2.new(0, 40, 0, 40)
+	logo.Position = UDim2.new(0, 10, 0, 10)
+	logo.BackgroundTransparency = 1
+	logo.Image = "rbxassetid://94361536997609"
+	logo.ZIndex = 999
+
+	local aspect = Instance.new("UIAspectRatioConstraint")
+	aspect.Parent = logo
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1.2
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Transparency = 0.4
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = logo
+
+	logo.Parent = Window.Root -- chính là GUI gốc của Fluent UI
 
 	return Window
 end
