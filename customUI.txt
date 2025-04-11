@@ -9,19 +9,6 @@ dsc.gg/hydrahub  |   31.01 - added Show_Assets toggle. Soon ill make normal bypa
 local Show_Button = false -- Shows the button for toggle fluent ui manually. If "false", works only on mobile, if "true", works everytime.
 local Button_Icon = "" -- Icon of the button for toggle fluent ui
 ----------------------------
-
-local Lighting = game:GetService("Lighting")
-local RunService = game:GetService("RunService")
-local LocalPlayer = game:GetService("Players").LocalPlayer
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local TextService = game:GetService("TextService")
-local Camera = game:GetService("Workspace").CurrentCamera
-local Mouse = LocalPlayer:GetMouse()
-local httpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-
 local Mobile
 if RunService:IsStudio() then
 	Mobile = false
